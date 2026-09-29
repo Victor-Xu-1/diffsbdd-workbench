@@ -490,6 +490,7 @@ try {
   await refreshDesigns();
   clearInputs();
   buttonState();
+  $("load-example").disabled = false;
   schedule();
 } catch (e) {
   state.ready = false;

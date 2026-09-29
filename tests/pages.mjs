@@ -23,7 +23,23 @@ try {
   page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(base, { waitUntil: "networkidle" });
+  let releaseStartup;
+  const startupGate = new Promise((resolve) => {
+    releaseStartup = resolve;
+  });
+  await page.route("**/api/capabilities", async (route) => {
+    await startupGate;
+    await route.continue();
+  });
+  await page.goto(base, { waitUntil: "domcontentloaded" });
+  assert.equal(
+    await page.locator("#load-example").isDisabled(),
+    true,
+    "Input actions must wait for initialization, otherwise the late reset loses the loaded structure",
+  );
+  releaseStartup();
+  await page.locator("#load-example:enabled").waitFor();
+  await page.unroute("**/api/capabilities");
   assert.equal(await page.locator("#generate").isDisabled(), true);
   assert.equal(await page.locator("#protein-read").isVisible(), false);
   assert.equal(

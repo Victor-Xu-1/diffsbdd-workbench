@@ -160,6 +160,30 @@ try {
       fullPage: true,
     });
   }
+  for (const task of ["generate", "inpaint", "diversify", "optimize"]) {
+    await page.locator(`[data-task="${task}"]`).click();
+    if (task === "inpaint")
+      await page
+        .locator("#initial-sdf")
+        .setInputFiles("tests/fixtures/generated_3rfm.sdf");
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#pocket-confirm-title").textContent ===
+        "口袋已确认",
+    );
+    await page.locator("#experience-mode").selectOption("expert");
+    const canvas = await page.locator("#pocket-viewer").boundingBox();
+    assert.ok(
+      canvas.width > 850 && canvas.height > 500,
+      `Large preview required for ${task}`,
+    );
+    assert.ok(await page.locator("#advanced-settings").isVisible());
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: `test-results/workspaces/${task}-expert.png`,
+      fullPage: true,
+    });
+  }
   assert.deepEqual(errors, []);
   console.log(
     "Passed: every sidebar workspace, enlarged previews, shared editor state, simple/expert parameter preservation and invalid-field recovery",
