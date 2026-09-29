@@ -22,6 +22,12 @@ try {
     await page.goto(process.env.DIFFSBDD_TEST_URL || "http://127.0.0.1:7865", {
       waitUntil: "networkidle",
     });
+    assert.ok(
+      (await page
+        .locator("#pocket-confirm-title")
+        .evaluate((el) => el.parentElement.clientWidth)) > 150,
+      "Empty/loading status must not collapse into the hidden icon column",
+    );
     await page.locator("#load-example").click();
     await page.waitForFunction(
       () => document.querySelector("#pocket-viewer").dataset.ready === "true",
@@ -54,6 +60,11 @@ try {
       await page.locator("#library-view").waitFor({ state: "visible" });
       await page.locator("#mobile-menu").click();
       await page.locator('[data-task="generate"]').click();
+      await page.waitForFunction(
+        () =>
+          document.querySelector("#pocket-confirm-title").textContent ===
+          "口袋已确认",
+      );
     }
     await page.screenshot({
       path: path.join("test-results/layout", `${width}.png`),

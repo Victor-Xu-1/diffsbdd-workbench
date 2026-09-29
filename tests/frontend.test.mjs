@@ -179,3 +179,41 @@ test("editor correspondence checks atom order and bond identity before synchroni
   assert.equal(editorAtomMap(mol, struct), null);
   assert.equal(editorAtomMap("invalid", struct), null);
 });
+
+import { ligandOrientation } from "../web/molecular-camera.js";
+import { molGraph } from "../web/molecular-model.js";
+test("view orientation exposes a tilted molecular plane without changing coordinates", () => {
+  const atoms = [
+    { x: -2, y: -1, z: -2 },
+    { x: 2, y: -1, z: 2 },
+    { x: 2, y: 1, z: 2 },
+    { x: -2, y: 1, z: -2 },
+  ];
+  const before = JSON.stringify(atoms),
+    q = ligandOrientation(atoms);
+  assert.ok(Math.abs(Math.hypot(...q) - 1) < 1e-8);
+  const rotated = atoms.map((p) => {
+    const u = q.slice(0, 3),
+      v = [p.x, p.y, p.z],
+      dot = u.reduce((sum, x, i) => sum + x * v[i], 0),
+      cross = [
+        u[1] * v[2] - u[2] * v[1],
+        u[2] * v[0] - u[0] * v[2],
+        u[0] * v[1] - u[1] * v[0],
+      ],
+      square = u.reduce((sum, x) => sum + x * x, 0);
+    return v.map(
+      (value, i) =>
+        2 * dot * u[i] + (q[3] * q[3] - square) * value + 2 * q[3] * cross[i],
+    );
+  });
+  assert.ok(rotated.every((point) => Math.abs(point[2]) < 1e-7));
+  assert.equal(JSON.stringify(atoms), before);
+});
+test("renderer boundary rejects atom clouds and incomplete chemical bond records", () => {
+  assert.throws(() => molGraph("2\nXYZ\nC 0 0 0\nO 1 0 0"));
+  const text =
+    "CO\n\n\n  2  1  0  0  0  0            999 V2000\n    0.0000    0.0000    0.0000 C   0  0  0  0\n    1.5000    0.0000    0.0000 O   0  0  0  0\n  1  2  1  0  0  0  0\nM  END\n";
+  assert.deepEqual(molGraph(text).edges, [[0, 1, 1]]);
+  assert.throws(() => molGraph(text.replace("  1  2  1", "  1  7  1")));
+});

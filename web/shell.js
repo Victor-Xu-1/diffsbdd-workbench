@@ -15,12 +15,29 @@ export function notice(message) {
   $("notice").textContent = message || "";
 }
 export function setView(view) {
+  document.body.dataset.view = view;
+  const surface =
+    view === "inspect" ? "design" : view === "editor" ? "results" : view;
   document.body.classList.remove("navigation-open");
   $("mobile-menu").setAttribute("aria-expanded", "false");
   document
     .querySelectorAll(".app-view")
-    .forEach((el) => (el.hidden = el.id !== view + "-view"));
+    .forEach((el) => (el.hidden = el.id !== surface + "-view"));
   $("action-bar").hidden = view !== "design";
+  $("generation-panel").hidden = view === "inspect";
+  $("results-title").textContent =
+    view === "editor" ? "结构编辑与设计反馈" : "任务与结果";
+  $("results-subtitle").textContent =
+    view === "editor"
+      ? "在二维画布中修改结构，保存后校验并更新三维构象。"
+      : "查看生成结构、下载结果，选择候选继续设计。";
+  const task = getContract().tasks[$("task").value];
+  $("page-title").textContent =
+    view === "inspect" ? "结构预览与相互作用" : task.title;
+  $("page-subtitle").textContent =
+    view === "inspect"
+      ? "载入蛋白和配体，检查完整结构、选择残基并查看相互作用。"
+      : task.help;
   document
     .querySelectorAll(".nav-item")
     .forEach((button) =>
@@ -30,7 +47,6 @@ export function setView(view) {
           (view === "design" && button.dataset.task === $("task").value),
       ),
     );
-  window.dispatchEvent(new Event("resize"));
 }
 export function updateCount() {
   const total =
@@ -128,7 +144,8 @@ export function setupShell(handlers) {
       safely(async () => {
         const view = button.dataset.view;
         setView(view);
-        if (view === "results") await callbacks.openResults();
+        if (view === "results" || view === "editor")
+          await callbacks.openResults();
         if (view === "library") await refreshLibrary();
         if (view === "designs") await refreshDesigns();
         if (view === "compare") await refreshComparison();
@@ -146,7 +163,7 @@ export function setupShell(handlers) {
   $("load-example").addEventListener(
     "click",
     safely(async () => {
-      setView("design");
+      setView(document.body.dataset.view === "inspect" ? "inspect" : "design");
       await callbacks.loadExample();
     }),
   );
@@ -167,6 +184,8 @@ export function setupShell(handlers) {
       await callbacks.openResults();
     }),
   );
+  $("edit-current").addEventListener("click", () => setView("editor"));
+  setView("design");
   taskHeading();
   applyPreset();
 }

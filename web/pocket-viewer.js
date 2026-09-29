@@ -10,12 +10,21 @@ import {
 import {
   applyCamera,
   resetCamera,
+  fitBindingSite,
   ligandStyle,
   proteinStyle,
   nearbyAtoms,
   residueContext,
 } from "./molecular-style.js";
 import { registerFigure } from "./figure-panel.js";
+import { addLigandModel, addProteinModel } from "./molecular-model.js";
+import { observeMolecularViewport } from "./molecular-viewport.js";
+import {
+  analyzeInteractions,
+  clearInteractions,
+  drawInteractions,
+  interactionResidues,
+} from "./interactions.js";
 let viewer,
   data,
   serial = 0,
@@ -85,6 +94,7 @@ function style() {
   element().dataset.ready = "false";
   clearFigureLabels(viewer);
   clearHover(viewer);
+  viewer.removeAllShapes();
   applyCamera(viewer, settings);
   viewer.setStyle({ model: 0 }, {});
   const pocketIds = new Set(data.residues);
@@ -96,7 +106,14 @@ function style() {
       : {}),
   };
   if (settings.proteinScope !== "none")
-    viewer.setStyle(proteinSelection, proteinStyle(settings));
+    viewer.setStyle(
+      proteinSelection,
+      proteinStyle(
+        viewer.getModel(1).selectedAtoms({}).length
+          ? settings
+          : { ...settings, representation: "cartoon" },
+      ),
+    );
   viewer.setStyle(
     { model: 1 },
     ligandStyle(settings.ligandRepresentation, settings),
@@ -110,6 +127,7 @@ function style() {
       reference,
       0,
       settings.proteinScope === "pocket" ? pocketIds : null,
+      interactionResidues("pocket", settings),
     );
   if (
     $("pocket-type").value === "residues" &&
@@ -123,13 +141,15 @@ function style() {
   }
   document.querySelector(
     ".pocket-preview-panel .protein-dot",
-  ).style.backgroundColor = settings.proteinColor;
+  ).style.backgroundColor =
+    settings.representation === "none" ? "#a0a8b0" : settings.proteinColor;
   document.querySelector(
     ".pocket-preview-panel .ligand-dot",
   ).style.backgroundColor = settings.carbonColor;
   clickTargets();
   enableMolecularHover(viewer);
   paintAtoms();
+  drawInteractions(viewer, "pocket", settings);
   viewer.resize();
   viewer.render();
   surfaceTask = drawSurface(current);
@@ -143,7 +163,10 @@ export function showPocket(value, onResidue) {
   ))
     button.disabled = false;
   const camera =
-    viewer && data?.protein === value.protein && data?.initial === value.initial
+    viewer &&
+    data?.protein === value.protein &&
+    data?.initial === value.initial &&
+    data?.reference === value.reference
       ? viewer.getView()
       : null;
   data = value;
@@ -161,27 +184,50 @@ export function showPocket(value, onResidue) {
     });
   viewer.removeAllModels();
   viewer.removeAllShapes();
-  viewer.addModel(value.protein, "pdb");
-  viewer.addModel(
-    value.initial || value.reference || "",
-    value.initial ? "mol" : value.reference_format || "pdb",
-  );
-  viewer.addModel(value.pocket, "pdb");
+  clearInteractions("pocket");
+  addProteinModel(viewer, value.protein);
+  const ligand = value.initial || value.reference;
+  if (ligand) addLigandModel(viewer, ligand);
+  else viewer.addModel("", "sdf");
+  addProteinModel(viewer, value.pocket);
   void style().catch(surfaceError);
   if (camera) viewer.setView(camera);
   else resetPocket();
   viewer.render();
+  void analyzeInteractions(
+    "pocket",
+    value.protein,
+    ligand,
+    () => {
+      if (!camera) resetPocket();
+      void style().catch(surfaceError);
+    },
+    (item) => {
+      viewer.zoomTo({
+        or: [
+          { model: 1 },
+          { model: 0, chain: item.residue.chain, resi: item.residue.number },
+        ],
+      });
+      viewer.zoom(0.85);
+      viewer.render();
+    },
+  );
 }
 export function resetPocket() {
   if (!viewer) return;
+  if (data?.initial || data?.reference) {
+    fitBindingSite(viewer, settings, interactionResidues("pocket"));
+    return;
+  }
   resetCamera(
     viewer,
     data?.initial || data?.reference ? 1 : data?.residues.length ? 2 : 0,
-    data?.initial || data?.reference?.length ? 1.05 : 1,
-    60,
+    0.85,
   );
 }
 export function clearPocket() {
+  clearInteractions("pocket");
   data = null;
   ++serial;
   if (viewer) {
@@ -307,11 +353,19 @@ export function setupPocketViewer() {
           "浏览器不允许全屏，可使用窗口最大化查看。";
       }
     });
-  for (const event of ["resize", "fullscreenchange"])
-    window.addEventListener(event, () => {
-      if (viewer) {
-        viewer.resize();
-        viewer.render();
-      }
-    });
+  observeMolecularViewport(
+    element(),
+    () => viewer,
+    () => {
+      if (
+        document.querySelector('[data-figure-preset="pocket"]').value ===
+        "protein"
+      )
+        resetCamera(viewer, 0, 0.85, 0, null, true);
+      else if (data?.initial || data?.reference)
+        fitBindingSite(viewer, settings, interactionResidues("pocket"), true);
+      else
+        resetCamera(viewer, data?.residues.length ? 2 : 0, 0.85, 0, null, true);
+    },
+  );
 }

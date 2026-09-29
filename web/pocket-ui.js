@@ -58,6 +58,7 @@ function pending(message = "选择已更改，正在更新口袋…") {
   onReady(false);
   $("pocket-confirmed").classList.add("pending");
   $("pocket-confirm-title").textContent = message;
+  $("pocket-confirm-detail").textContent = "结构读取和口袋核对完成后即可继续。";
   $("protein-read").hidden = !proteinText;
 }
 export async function inspectPocket() {
@@ -78,16 +79,29 @@ export async function inspectPocket() {
     data.residues.forEach((id) => selected.add(id));
     showPocket(data, toggleResidue);
     $("pocket-confirmed").classList.remove("pending");
-    $("pocket-confirm-title").textContent = "口袋已确认";
+    const complete = ["verified", "none"].includes(
+      data.ligand_status?.state || "none",
+    );
+    $("pocket-confirm-title").textContent = complete
+      ? "口袋已确认"
+      : "请补全配体结构";
+    $("ligand-integrity").textContent = data.ligand_status?.message || "";
+    $("fetch-component").hidden =
+      data.ligand_status?.state !== "needs_definition";
+    $("fetch-component").textContent =
+      `读取 ${data.ligand_status?.component || ""} 标准键型`;
+    $("fetch-component").title =
+      "联网下载 wwPDB 公开化学组分定义，仅发送组分编号，不上传蛋白或分子坐标。之后可离线使用。";
     $("pocket-confirm-detail").textContent =
       `已识别 ${data.residue_count} 个口袋残基。可直接在预览上点击调整。`;
     $("protein-read").hidden = false;
     $("show-residues").disabled = false;
     $("prepare-open").disabled = false;
-    onReady(true);
-    return true;
+    onReady(complete);
+    return complete;
   } catch (error) {
     if (version !== sequence) return false;
+    clearPocket();
     $("pocket-confirm-title").textContent = "请检查结构或选择口袋";
     $("pocket-confirm-detail").textContent = error.message;
     onError(error.message);
@@ -236,11 +250,30 @@ export function setupPocketUI(callbacks) {
     try {
       await fn();
     } catch (error) {
+      clearPocket();
       pending("请检查输入文件");
       onError(error.message);
     }
   };
   $("choose-protein").addEventListener("click", () => $("protein").click());
+  $("fetch-component").addEventListener(
+    "click",
+    safely(async () => {
+      const identifier = current?.ligand_status?.component;
+      if (!identifier) return;
+      $("fetch-component").disabled = true;
+      try {
+        await api(
+          `/api/components/${encodeURIComponent(identifier)}/download`,
+          { method: "POST", body: "{}" },
+        );
+        if (current?.ligand_status?.component === identifier)
+          await inspectPocket();
+      } finally {
+        $("fetch-component").disabled = false;
+      }
+    }),
+  );
   $("choose-reference").addEventListener("click", () =>
     $("reference-sdf").click(),
   );
@@ -339,6 +372,8 @@ export function clearInputs() {
   $("show-residues").disabled = true;
   $("prepare-open").disabled = true;
   $("ligand-choice").hidden = true;
+  $("ligand-integrity").textContent = "";
+  $("fetch-component").hidden = true;
   $("pocket-confirm-detail").textContent =
     "上传 PDB，或点击右上角载入官方示例。";
   clearPocket();

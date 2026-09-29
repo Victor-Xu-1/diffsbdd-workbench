@@ -4,7 +4,9 @@ export async function api(path, options = {}) {
   try {
     const response = await fetch(path, {
       ...options,
-      signal: controller.signal,
+      signal: options.signal
+        ? AbortSignal.any([controller.signal, options.signal])
+        : controller.signal,
       headers: {
         "Content-Type": "application/json",
         "X-DiffSBDD-Client": "local-ui",

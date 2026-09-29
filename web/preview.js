@@ -2,12 +2,21 @@ import { addFigureLabel, clearFigureLabels } from "./figure-labels.js";
 import {
   applyCamera,
   resetCamera,
+  fitBindingSite,
   ligandStyle,
   proteinStyle,
   nearbyAtoms,
   residueContext,
 } from "./molecular-style.js";
 import { registerFigure } from "./figure-panel.js";
+import { addLigandModel, addProteinModel } from "./molecular-model.js";
+import { observeMolecularViewport } from "./molecular-viewport.js";
+import {
+  analyzeInteractions,
+  clearInteractions,
+  drawInteractions,
+  interactionResidues,
+} from "./interactions.js";
 import {
   loadEditor,
   setupEditorSelection,
@@ -34,19 +43,12 @@ let viewer,
   rings = [],
   selected = new Set(),
   measurement = [],
-  animation = null,
-  trajectory = null,
   revision = 0;
 const cache = new Map();
 async function read(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error("无法读取三维结构，请刷新任务后重试。");
   return response.text();
-}
-function stopAnimation() {
-  if (animation) clearInterval(animation);
-  animation = null;
-  $("trajectory-play").textContent = "播放生成过程";
 }
 function atomName(atom) {
   return atom.model === 1
@@ -110,6 +112,9 @@ function style() {
       viewer,
       figureSettings,
       viewer.getModel(1).selectedAtoms({}),
+      0,
+      null,
+      interactionResidues("result", figureSettings),
     );
   if (selected.size)
     viewer.addStyle(
@@ -139,6 +144,7 @@ function style() {
     clicked,
   );
   enableMolecularHover(viewer);
+  drawInteractions(viewer, "result", figureSettings);
   const nextSurfaceKey = `${sceneVersion}:${figureSettings.showSurface}:${figureSettings.proteinScope}:${figureSettings.surfaceType}:${figureSettings.surfaceOpacity}:${figureSettings.proteinColor}`;
   if (surfaceKey !== nextSurfaceKey) {
     surfaceKey = nextSurfaceKey;
@@ -186,14 +192,35 @@ function scene() {
       antialias: true,
     });
   viewer.removeAllModels();
-  viewer.addModel(
+  addProteinModel(
+    viewer,
     figureSettings.proteinScope === "pocket" ? pocket : protein,
-    "pdb",
   );
-  viewer.addModel(ligand || "", "mol");
-  comparisonModel = initial ? viewer.addModel(initial, "sdf") : null;
+  addLigandModel(viewer, ligand);
+  comparisonModel = initial ? addLigandModel(viewer, initial) : null;
   style();
-  resetCamera(viewer, 1, 1.05);
+  fitBindingSite(viewer, figureSettings, interactionResidues("result"));
+}
+function analyze() {
+  void analyzeInteractions(
+    "result",
+    protein,
+    ligand,
+    () => {
+      fitBindingSite(viewer, figureSettings, interactionResidues("result"));
+      style();
+    },
+    (item) => {
+      viewer.zoomTo({
+        or: [
+          { model: 1 },
+          { model: 0, chain: item.residue.chain, resi: item.residue.number },
+        ],
+      });
+      viewer.zoom(0.85);
+      viewer.render();
+    },
+  );
 }
 async function contextFor(job) {
   if (!cache.has(job.id)) {
@@ -207,7 +234,7 @@ async function contextFor(job) {
   return cache.get(job.id);
 }
 export async function showMolecule(job, index) {
-  stopAnimation();
+  clearInteractions("result");
   const current = ++revision;
   const mol = await read(`/api/jobs/${job.id}/molecules/${index}.mol`);
   const pose = await api("/api/poses/inspect", {
@@ -228,24 +255,14 @@ export async function showMolecule(job, index) {
   measurement = [];
   $("fixed-atoms").value = "";
   $("compare-input").disabled = !initial;
-  $("compare-input").checked = !!initial;
-  $("trajectory-controls").hidden = true;
-  trajectory = null;
+  $("compare-input").checked = false;
   await loadEditor(ligand);
   if (current !== revision) return;
   scene();
-  if (job.status !== "running" && job.report?.settings?.trajectory) {
-    const result = await fetch(`/api/jobs/${job.id}/files/trajectory.json`);
-    if (result.ok && current === revision) {
-      trajectory = await result.json();
-      $("trajectory-controls").hidden = false;
-      $("trajectory-frame").max = trajectory.frames.length - 1;
-      $("trajectory-frame").value = 0;
-    }
-  }
+  analyze();
 }
 export async function showEdited(job, edit) {
-  stopAnimation();
+  clearInteractions("result");
   const current = ++revision;
   const text = await read(`/api/jobs/${job.id}/edits/${edit.id}.sdf`);
   const pose = await api("/api/poses/inspect", {
@@ -259,10 +276,8 @@ export async function showEdited(job, edit) {
   if (current !== revision) return false;
   [pocket, protein] = context;
   initial = parent;
-  trajectory = null;
-  $("trajectory-controls").hidden = true;
   $("compare-input").disabled = false;
-  $("compare-input").checked = true;
+  $("compare-input").checked = false;
   ligand = pose.molblock;
   rings = pose.rings;
   selected.clear();
@@ -270,32 +285,15 @@ export async function showEdited(job, edit) {
   await loadEditor(ligand);
   if (current !== revision) return false;
   scene();
+  analyze();
   return true;
-}
-function frame() {
-  if (!trajectory || !viewer) return;
-  const i = Number($("trajectory-frame").value),
-    snapshot = trajectory.frames[i];
-  const xyz =
-    `${snapshot.elements.length}\nDiffusion intermediate\n` +
-    snapshot.elements
-      .map((element, j) => `${element} ${snapshot.coordinates[j].join(" ")}`)
-      .join("\n");
-  viewer.removeAllModels();
-  comparisonModel = null;
-  viewer.addModel(pocket, "pdb");
-  viewer.addModel(xyz, "xyz");
-  viewer.setStyle({ model: 0 }, { line: { color: "#9baab9" } });
-  viewer.setStyle(
-    { model: 1 },
-    { sphere: { scale: 0.25, colorscheme: "cyanCarbon" } },
-  );
-  viewer.render();
-  $("trajectory-label").textContent =
-    `第 ${i + 1} / ${trajectory.frames.length} 帧 · 中间状态不作为化学有效分子使用`;
 }
 export function setupPreview() {
   setupEditorSelection({
+    layoutError: () => {
+      $("selection-sync").textContent =
+        "二维编辑器取景未完成，请重新打开结构编辑页面。";
+    },
     mapped: () => {
       $("selection-sync").textContent =
         "二维与三维原子已建立对应，可点选联动。";
@@ -327,17 +325,12 @@ export function setupPreview() {
     },
     ready: () => surfaceTask,
     focus: (target) => {
-      resetCamera(
-        viewer,
-        target === "protein" ? 0 : 1,
-        target === "protein" ? 0.95 : 1.05,
-      );
+      resetCamera(viewer, target === "protein" ? 0 : 1, 0.85);
     },
   });
   for (const id of ["atom-labels", "compare-input", "click-mode"])
     $(id).addEventListener("change", style);
   $("reset-view").addEventListener("click", () => {
-    stopAnimation();
     if (viewer) scene();
   });
   $("clear-fixed").addEventListener("click", () => {
@@ -354,31 +347,22 @@ export function setupPreview() {
       $("viewer-note").textContent = e.message;
     }
   });
-  $("trajectory-frame").addEventListener("input", () => {
-    stopAnimation();
-    frame();
-  });
-  $("trajectory-play").addEventListener("click", () => {
-    if (animation) {
-      stopAnimation();
-      return;
-    }
-    if (!trajectory) return;
-    $("trajectory-play").textContent = "暂停";
-    animation = setInterval(() => {
-      $("trajectory-frame").value =
-        (Number($("trajectory-frame").value) + 1) % trajectory.frames.length;
-      frame();
-    }, 180);
-  });
-  $("trajectory-exit").addEventListener("click", () => {
-    stopAnimation();
-    scene();
-  });
-  window.addEventListener("resize", () => {
-    if (viewer) {
-      viewer.resize();
-      viewer.render();
-    }
-  });
+  observeMolecularViewport(
+    $("viewer"),
+    () => viewer,
+    () => {
+      if (
+        document.querySelector('[data-figure-preset="result"]').value ===
+        "protein"
+      )
+        resetCamera(viewer, 0, 0.85, 0, null, true);
+      else
+        fitBindingSite(
+          viewer,
+          figureSettings,
+          interactionResidues("result"),
+          true,
+        );
+    },
+  );
 }

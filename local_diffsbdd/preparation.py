@@ -30,10 +30,23 @@ def prepare_structure(request):
     chain_ids = {c.id for c in model.get_chains()}
     if set(request.chains) - chain_ids:
         raise ValueError("选定的蛋白链不存在。")
-    atoms = list(model.get_atoms())
+    residues = list(model.get_residues())
+    if any(residue.is_disordered() == 2 for residue in residues):
+        raise ValueError("同一位置含不同残基的替代结构，请先选择一种残基再导入。")
+    atoms = [atom for residue in residues for atom in residue.get_unpacked_list()]
     if not atoms or not np.isfinite([a.coord for a in atoms]).all():
         raise ValueError("结构坐标为空或含非有限值。")
     selected = set(request.chains) or chain_ids
+    alternatives = {}
+    for residue in residues:
+        scores = {}
+        for atom in residue.get_unpacked_list():
+            if atom.altloc != " ":
+                scores[atom.altloc] = scores.get(atom.altloc, 0) + (atom.occupancy or 0)
+        if scores:
+            alternatives[residue.get_full_id()] = min(
+                scores, key=lambda key: (-scores[key], key)
+            )
 
     class Selection(Select):
         def accept_model(self, m):
@@ -48,13 +61,43 @@ def prepare_structure(request):
             return request.keep_ligands or is_aa(r, standard=True)
 
         def accept_atom(self, a):
-            return not request.remove_hydrogens or a.element.upper() != "H"
+            keep_alt = a.altloc == " " or a.altloc == alternatives.get(
+                a.parent.get_full_id()
+            )
+            return keep_alt and (
+                not request.remove_hydrogens or a.element.upper() != "H"
+            )
 
     stream = StringIO()
     writer = PDBIO()
     writer.set_structure(structure)
     writer.save(stream, Selection())
-    output = stream.getvalue()
+    # Canonicalize the chosen conformer to blank altloc: browser parsers otherwise
+    # commonly discard a valid selected B conformer by default.
+    output = (
+        "\n".join(
+            line[:16] + " " + line[17:]
+            if line.startswith(("ATOM  ", "HETATM"))
+            else line
+            for line in stream.getvalue().splitlines()
+        )
+        + "\n"
+    )
+    secondary = [
+        line
+        for line in request.protein_text.splitlines()
+        if (
+            line.startswith("HELIX ")
+            and line[19:20] in selected
+            and line[31:32] in selected
+        )
+        or (
+            line.startswith("SHEET ")
+            and line[21:22] in selected
+            and line[32:33] in selected
+        )
+    ]
+    output = "\n".join(secondary) + ("\n" if secondary else "") + output
     processed = PDBParser(QUIET=True).get_structure("output", StringIO(output))
     remaining = list(processed.get_atoms())
     if not remaining:
@@ -84,4 +127,5 @@ def prepare_structure(request):
         "output_atoms": len(remaining),
         "removed_atoms": len(atoms) - len(remaining),
         "models_in_file": len(models),
+        "alternate_residues_resolved": len(alternatives),
     }

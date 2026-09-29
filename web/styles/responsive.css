@@ -1,13 +1,13 @@
 @media (min-width: 1650px) {
   .design-top {
-    grid-template-columns: 0.426fr 0.574fr;
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   }
   .input-panel,
   .pocket-preview-panel {
     min-height: 475px;
   }
   #pocket-viewer {
-    height: 384px;
+    height: clamp(520px, 62vh, 780px);
   }
 }
 @media (max-width: 1250px) {
@@ -28,7 +28,7 @@
     padding-inline: 13px;
   }
   .design-top {
-    grid-template-columns: minmax(340px, 0.45fr) minmax(380px, 0.55fr);
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
   }
   .main-content {
     padding: 16px 15px 110px;
@@ -97,16 +97,16 @@
 }
 @media (max-width: 1050px) {
   :root {
-    --sidebar: 72px;
+    --sidebar: 180px;
   }
   .nav-item {
-    font-size: 0;
-    gap: 0;
-    justify-content: center;
+    font-size: 14px;
+    gap: 8px;
+    justify-content: flex-start;
     padding: 10px;
   }
   .nav-label {
-    display: none;
+    display: block;
   }
   .nav-item .icon {
     width: 24px;
@@ -357,4 +357,99 @@
   .navigation-open .nav-label {
     display: block;
   }
+}
+
+/* One canvas per context: navigation changes presentation, never molecular state. */
+body[data-view="results"] #editing-panel {
+  display: none;
+}
+body[data-view="editor"] #edit-current {
+  display: none;
+}
+body[data-view="inspect"] .main-content {
+  padding-bottom: 28px;
+}
+#advanced-settings {
+  padding: 14px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+}
+#advanced-settings h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+.experience-control {
+  margin: 0;
+}
+.experience-control select {
+  width: 118px;
+  height: 34px;
+  font-size: 13px;
+}
+.input-panel .file-row {
+  flex-wrap: wrap;
+}
+.input-panel .file-row .file-value {
+  flex-basis: 100%;
+}
+.input-panel .file-row > button {
+  margin-left: auto;
+}
+.input-panel .pocket-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.input-panel .confirmation {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+}
+.input-panel .confirmation button {
+  grid-column: 2;
+  margin-left: 0;
+}
+.input-panel .confirmation > div {
+  grid-column: 2;
+  min-width: 0;
+}
+.input-panel .confirmation.pending {
+  grid-template-columns: minmax(0, 1fr);
+}
+.input-panel .confirmation.pending > div,
+.input-panel .confirmation.pending button {
+  grid-column: 1;
+}
+@media (min-width: 1251px) {
+  body[data-view="editor"] .results-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  body[data-view="editor"] #editor {
+    height: 560px;
+  }
+}
+@media (max-width: 1250px) {
+  body[data-view="editor"] .results-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  #pocket-viewer,
+  #viewer {
+    height: 430px;
+  }
+  .experience-control select {
+    width: 94px;
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+  .header-actions {
+    gap: 6px;
+  }
+  .current-design {
+    display: none;
+  }
+}
+
+.input-panel .radio-card {
+  width: 100%;
 }

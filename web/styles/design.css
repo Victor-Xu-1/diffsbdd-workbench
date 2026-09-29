@@ -1,6 +1,6 @@
 .design-top {
   display: grid;
-  grid-template-columns: minmax(420px, 0.426fr) minmax(480px, 0.574fr);
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -190,7 +190,7 @@
   border-radius: 0;
 }
 #pocket-viewer {
-  height: 347px;
+  height: clamp(480px, 59vh, 680px);
   width: 100%;
   position: relative;
   overflow: hidden;

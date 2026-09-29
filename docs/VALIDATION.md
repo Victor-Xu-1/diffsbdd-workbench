@@ -2,7 +2,36 @@
 
 Local release verification, 2026-09-29 (UTC). Hardware: Windows 11 / Ubuntu WSL2, NVIDIA RTX 5060 Laptop 8151 MiB, 32 GB host RAM. Python 3.10.20, PyTorch 2.7.1+cu128. This records observed behavior; it is not a drug-discovery benchmark or a guarantee of model validity for other targets.
 
-## Version 0.3 UI consolidation and molecular selection
+## Version 0.4 molecular integrity and direct workspaces
+
+Verified on 2026-09-30. Baseline: `903bb42b79dce465982a7dc50c6e46042f6a9946`. Scope remains local molecular design and analysis; training and full-dataset benchmarks are not operational modules.
+
+| Change | Risk and acceptance | Actual evidence |
+|---|---|---|
+| Isolate raw diffusion states | Atom clouds must never replace final structures | Fail-first production reproduction changed a 24-atom/27-bond ligand to 140 distance-guessed bonds during playback. Playback and competing renderer path removed; native diagnostic JSON remains downloadable. Real 3Dmol graph now checked against canonical SDF. |
+| PDB ligand topology and protein conformers | Lost bond orders, hidden B conformers, guessed missing atoms | Public caffeine: 14 heavy atoms, 15 bonds, 4 double bonds, matching CCD identity and unchanged coordinates. Unknown definition/missing heavy atoms explicitly blocked; aligned SDF recovery verified. Higher-occupancy B fixture coordinates retained as one visible conformer. |
+| Typed local interactions | Distance alone mislabeled as hydrogen bond; stale analysis | Real ProLIF detects ASN A253 hydrogen-bond candidate at 3.334739 Å and PHE A168 stacking at 4.171988 Å; 100 Å translation removes all interactions; carbon-only ligand produces no hydrogen bonds. Native browser lines, details and JSON download checked. |
+| Shared preview/editor layouts | Small/clipped molecules after navigation; missing editor text | Native projected atom bounds and ligand size checked. Ketcher refreshes cached text bounds after hidden-container layout without reimporting chemistry; graphical edits and navigation-preserved SMILES pass. Resizing preserves 3D rotation. |
+| Simple/expert mode | Duplicate state, lost parameters, hidden invalid fields | Real browser checks every workspace, large preview, shared editor, parameter preservation, invalid-field recovery, Chinese help and four viewport widths. |
+| Concurrent analysis | Quick view changes rejected as bad chemistry | Fail-first real HTTP test returned 200/422/422. Bounded lock wait now returns three identical successful analyses; cold-start browser workflow passes without console errors. |
+| Dependencies | New chemistry packages break model runtime | ProLIF 2.2.2, Gemmi 0.7.5 and transitive dependencies hash-locked; existing versions retained. All eight checkpoints generated one valid connected molecule each on real CUDA. |
+
+Commands actually run (Python used the isolated validation environment with the installed scientific runtime on `PYTHONPATH`; browser URL was port 17865 with `PLAYWRIGHT_CHANNEL=chrome`):
+
+- `python -m unittest discover -s tests -q`: **53 passed**, including real HTTP, RDKit/CCD/ProLIF, persistence, concurrency and invalid-input/origin cases.
+- `npm test`: **10 passed**.
+- `node tests/browser.mjs --ui-only`, `node tests/pages.mjs`, `node tests/molecular.mjs`, `node tests/workspace_modes.mjs`, `node tests/layout.mjs`: **passed**. Native editor, real WebGL, 2400-pixel PNG, downloads and API; widths 1536, 1024, 768, 390. Screenshots inspected, including corrected loading layout.
+- `node tests/browser.mjs`: **passed with real GPU inference**. Generation `6889a9182e6242558442bcf2e8881c93` **2/2**, two-round optimization `7948ab1b1da04d2d960a3e21cb100a9d` **6/6**, fixed-atom design `cc07aa9d0c0c46d2831c982ea8154dea` **1/1**; graphical editing, feedback, diagnostic download and cancellation passed. Later resize, label-margin and bounded analysis-wait corrections were retested through affected real UI/API paths; inference was unchanged.
+- `python -m tests.gpu_smoke --all-models --case MODEL_ID --output OUTPUT`: all eight model IDs; **8/8 passed**, one valid connected candidate each, 11.5–23.6 seconds per case.
+- Ruff check/format, Python compileall, shell syntax, Prettier and vendor verification: **passed**, all **53** vendor files unchanged.
+- Real HTTPS CCD download/cache check for ATP: SHA-256 `06d876e9fe28b6981725288cd03943818ef6faf4839782c2a0a8929d65c85336`; second read used local definition. Only the public component ID was sent.
+- `pip-audit 2.10.0`: no known vulnerabilities among audited packages; CUDA-tagged Torch and torch-scatter could not be matched against PyPI and remain explicitly unassessed by that audit.
+
+Audit covered fixed-host/redirect-rejecting downloads, identifiers/body limits/timeouts, atomic cache writes, safe DOM text, same-origin mutation protection, bounded analysis locks/cache, request cancellation/revision guards, renderer graph validation and no duplicate molecular state. No authentication model, persisted job format, upstream model source or weight changed. LLM, docking and training tests are not applicable. User data and reference screenshots are not published.
+
+Limits: ProLIF uses standard amino-acid templates and implicit hydrogens; incomplete protein residues may prevent analysis while preview remains available. Water bridges, metals, covalent interactions, pH preparation and binding affinity are not calculated. Counts represent one closest pair per residue/detector; exported `occurrences` records detected combinations. Figures follow scientific drawing conventions, not journal certification or equivalence to every commercial-suite function.
+
+## Version 0.3 UI consolidation and molecular selection (historical)
 
 Baseline: `bf51dad6fafa8871a6ed759fccabd79170ad9425`. This change removes the remaining duplicate presentation layers, rather than cloning every reference-image module. Native inference, weights and dependencies are unchanged.
 

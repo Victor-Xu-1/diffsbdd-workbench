@@ -70,6 +70,7 @@ try {
   await page.locator('[data-figure="pocket"]').click();
   await page.locator("#figure-sidechains").check();
   await page.locator("#figure-labels").check();
+  await page.locator("#figure-ligandRepresentation").selectOption("stick");
   await page.locator("#figure-proteinScope").selectOption("pocket");
   await page.locator("#figure-contextRadius").fill("4.5");
   await page.locator("#figure-showSurface").check();
@@ -117,8 +118,7 @@ try {
   if (!uiOnly) {
     await page.locator("#count").fill("2");
     await page.locator("#size_mode").selectOption("fixed");
-    if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
-      await page.locator("#advanced-settings > summary").click();
+    await page.locator("#experience-mode").selectOption("expert");
     await page.locator("#atoms").fill("24");
     const sent = page.waitForResponse(
       (r) => r.url() === `${base}/api/jobs` && r.request().method() === "POST",
@@ -135,6 +135,7 @@ try {
     );
   }
   await page.locator(".molecule").first().click();
+  await page.locator("#nav-editor").click();
   await page.locator("#editor").scrollIntoViewIfNeeded();
   const frame = page.frameLocator("#editor");
   await frame.getByTestId("F-button").click();
@@ -145,6 +146,10 @@ try {
   const editor = page.frames().find((f) => f.url().includes("/editor/"));
   const smiles = await editor.evaluate(() => window.ketcher.getSmiles());
   assert.match(smiles, /F/);
+  assert.ok(
+    !smiles.includes("."),
+    "Graphical atom replacement must not create a disconnected atom",
+  );
   assert.equal(await page.locator("#fixed-atoms").inputValue(), "");
   assert.match(await page.locator("#selection-sync").innerText(), /结构已修改/);
   const note = `Browser test: graphical O→F edit ${Date.now()}`;
@@ -193,6 +198,7 @@ try {
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("#nav-results").click();
   await page.locator("#history").selectOption(parent);
+  await page.locator("#nav-editor").click();
   await page.getByText(note, { exact: false }).first().waitFor();
   check("feedback survives page reload");
   await page.locator('[data-figure-preset="result"]').selectOption("surface");
@@ -253,8 +259,7 @@ try {
           "口袋已确认",
     );
     await page.locator('[data-task="inpaint"]').click();
-    if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
-      await page.locator("#advanced-settings > summary").click();
+    await page.locator("#experience-mode").selectOption("expert");
     await page.locator("#size_mode").selectOption("fixed");
     const data = await (
       await context.request.get(`${base}/api/jobs/${parent}`)
@@ -281,13 +286,16 @@ try {
       { timeout: 30000 },
     );
     await page.locator("#history").selectOption(created.id);
-    await page.locator("#trajectory-controls").waitFor({ state: "visible" });
-    await page.locator("#trajectory-play").click();
-    await page.waitForFunction(
-      () => Number(document.querySelector("#trajectory-frame").value) > 1,
+    const trajectory = await (
+      await context.request.get(
+        `${base}/api/jobs/${created.id}/files/trajectory.json`,
+      )
+    ).json();
+    assert.ok(trajectory.frames.length > 1);
+    assert.equal(await page.locator("#trajectory-play").count(), 0);
+    check(
+      "fixed-atom inference and downloadable diagnostic trajectory; final molecule stays intact",
     );
-    await page.locator("#trajectory-exit").click();
-    check("fixed-atom inference and real denoising trajectory playback");
     await page.locator('[data-task="generate"]').click();
     await page.locator("#load-example").click();
     await page
@@ -324,8 +332,7 @@ try {
   );
   await page.setViewportSize({ width: 1536, height: 1024 });
   await page.locator("#load-example").click();
-  if (await page.locator("#advanced-settings").evaluate((el) => el.open))
-    await page.locator("#advanced-settings > summary").click();
+  await page.locator("#experience-mode").selectOption("simple");
   await page.waitForFunction(
     () =>
       document.querySelector("#pocket-viewer").dataset.ready === "true" &&

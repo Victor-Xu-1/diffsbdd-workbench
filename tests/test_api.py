@@ -20,6 +20,49 @@ JOB = "a" * 32
 
 
 class ApiTests(unittest.TestCase):
+    def test_concurrent_interaction_views_complete_without_spurious_input_errors(self):
+        from local_diffsbdd.pockets import preview_pocket
+        from local_diffsbdd.contracts import GenerationInput
+
+        preview = preview_pocket(GenerationInput(), None)
+        payload = {"protein_text": preview["protein"], "sdf": preview["reference"]}
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            responses = list(
+                pool.map(
+                    lambda _: self.request("/api/interactions/inspect", payload),
+                    range(3),
+                )
+            )
+        self.assertEqual([response[0] for response in responses], [200, 200, 200])
+        summaries = [json.loads(response[1])["summary"] for response in responses]
+        self.assertTrue(all(summary == summaries[0] for summary in summaries))
+
+    def test_interaction_api_uses_real_chemistry_and_validates_inputs(self):
+        from local_diffsbdd.pockets import preview_pocket
+        from local_diffsbdd.contracts import GenerationInput
+
+        preview = preview_pocket(GenerationInput(), None)
+        payload = {"protein_text": preview["protein"], "sdf": preview["reference"]}
+        status, body, _ = self.request("/api/interactions/inspect", payload)
+        self.assertEqual(status, 200)
+        result = json.loads(body)
+        self.assertGreater(result["summary"]["hydrogen_bond"], 0)
+        self.assertGreater(result["summary"]["pi_stacking"], 0)
+        self.assertEqual(
+            self.request("/api/interactions/inspect", {**payload, "sdf": "invalid"})[0],
+            422,
+        )
+        self.assertEqual(
+            self.request(
+                "/api/interactions/inspect",
+                payload,
+                headers={"Origin": "https://outside.example"},
+            )[0],
+            403,
+        )
+        self.assertEqual(self.request("/api/components/CFF/download", {})[0], 200)
+        self.assertEqual(self.request("/api/components/BAD!!/download", {})[0], 422)
+
     def test_capabilities_exposes_real_option_limits_and_registered_models(self):
         from local_diffsbdd.options import DesignOptions
 
@@ -208,7 +251,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         preview = json.loads(body)
         self.assertEqual(preview["residues"], residues)
-        self.assertIn("HETATM", preview["reference"])
+        self.assertEqual(preview["reference_format"], "sdf")
+        reference = Chem.MolFromMolBlock(preview["reference"])
+        self.assertEqual((reference.GetNumAtoms(), reference.GetNumBonds()), (14, 15))
         self.assertGreater(len(preview["inventory"]), len(residues))
         payload = {
             "mode": "custom",

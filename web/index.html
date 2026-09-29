@@ -30,6 +30,16 @@
         /><strong>DiffSBDD</strong><span>药物设计工作台</span></a
       ><span id="current-design" class="current-design">未保存的设计</span>
       <div class="header-actions">
+        <label class="experience-control"
+          ><span class="sr-only">操作模式</span
+          ><select
+            id="experience-mode"
+            title="简洁模式使用常用选择；专家模式展开当前任务支持的完整参数，不改变已选设置。"
+          >
+            <option value="simple">简洁模式</option>
+            <option value="expert">专家模式</option>
+          </select></label
+        >
         <button id="load-example" class="text-button" aria-label="载入官方示例">
           <img
             class="icon"
@@ -55,6 +65,35 @@
             src="/assets/vendor/tabler/device-floppy.svg"
             alt=""
           />已保存设计
+        </button>
+        <hr />
+        <p class="nav-label">检查与编辑</p>
+        <button class="nav-item" data-view="inspect">
+          <img
+            class="icon"
+            src="/assets/vendor/tabler/atom.svg"
+            alt=""
+          />预览与相互作用
+        </button>
+        <button id="nav-editor" class="nav-item" data-view="editor">
+          <img
+            class="icon"
+            src="/assets/vendor/tabler/schema.svg"
+            alt=""
+          />结构编辑
+        </button>
+        <button
+          id="prepare-open"
+          class="nav-item"
+          type="button"
+          disabled
+          title="先在设计或预览页面载入蛋白，即可选链、去水并导出处理后的结构。"
+        >
+          <img
+            class="icon"
+            src="/assets/vendor/tabler/adjustments.svg"
+            alt=""
+          />蛋白准备
         </button>
         <hr />
         <p class="nav-label">结果</p>
@@ -189,6 +228,10 @@
                   </div>
                   <input id="reference-sdf" type="file" accept=".sdf" hidden />
                   <p class="hint">没有参考配体？直接选择口袋残基。</p>
+                  <p id="ligand-integrity" class="hint" role="status"></p>
+                  <button id="fetch-component" type="button" hidden>
+                    获取标准配体键型
+                  </button>
                 </div>
                 <div id="ligand-choice" hidden>
                   <label for="detected-ligand">选择蛋白文件中的参考配体</label
@@ -201,9 +244,6 @@
                     <option value="residues">残基</option></select
                   ><input id="reference" />
                 </div>
-                <button id="prepare-open" type="button" disabled>
-                  整理当前蛋白：选链 / 去水
-                </button>
                 <div id="pocket-confirmed" class="confirmation pending">
                   <img
                     src="/assets/vendor/tabler/circle-check.svg"
@@ -308,6 +348,11 @@
                   >拖拽旋转 · 滚轮缩放 · 点击选择残基</small
                 >
               </div>
+              <div
+                id="pocket-interactions"
+                class="interaction-panel"
+                aria-live="polite"
+              ></div>
             </section>
           </div>
           <section class="panel generation-panel" id="generation-panel">
@@ -331,19 +376,13 @@
               </div>
               <div id="optimization-fields" class="field-grid" hidden></div>
 
-              <details id="advanced-settings">
-                <summary>
-                  <img
-                    class="small-icon"
-                    src="/assets/vendor/tabler/chevron-down.svg"
-                    alt=""
-                  /><strong>高级参数（可选）</strong>
-                </summary>
+              <section id="advanced-settings" hidden>
+                <h3>专家参数</h3>
                 <div id="advanced-fields" class="field-grid"></div>
                 <p class="hint">
                   只显示当前任务可用的参数。参数含义和建议可通过旁边的问号查看。
                 </p>
-              </details>
+              </section>
             </div>
           </section>
         </form>
@@ -352,8 +391,10 @@
         <div class="page-heading">
           <div>
             <p class="breadcrumb">02 / 设计记录</p>
-            <h1>任务与结果</h1>
-            <p>查看生成结构、记录设计反馈，继续下一轮探索。</p>
+            <h1 id="results-title">任务与结果</h1>
+            <p id="results-subtitle">
+              查看生成结构、记录设计反馈，继续下一轮探索。
+            </p>
           </div>
           <button class="subtle" data-view="design">返回设计</button>
         </div>
@@ -383,6 +424,7 @@
           <section id="preview-panel" class="panel" hidden>
             <div class="panel-heading">
               <h2>分子与口袋预览</h2>
+              <button id="edit-current" type="button">编辑当前分子</button>
               <button type="button" data-figure="result">显示与出图</button>
             </div>
             <div class="viewer-tools">
@@ -414,19 +456,11 @@
             </div>
             <div id="viewer" aria-label="候选分子三维预览"></div>
             <p id="viewer-note" class="hint" aria-live="polite"></p>
-            <div id="trajectory-controls" hidden>
-              <label for="trajectory-frame"
-                >生成过程（不是分子动力学轨迹）</label
-              ><input
-                id="trajectory-frame"
-                type="range"
-                min="0"
-                max="1"
-                value="0"
-              /><span id="trajectory-label"></span
-              ><button id="trajectory-play" type="button">播放生成过程</button
-              ><button id="trajectory-exit" type="button">返回最终分子</button>
-            </div>
+            <div
+              id="result-interactions"
+              class="interaction-panel"
+              aria-live="polite"
+            ></div>
             <div id="molecule-detail"></div>
             <div class="viewer-tools">
               <label
@@ -677,7 +711,8 @@
           </select></label
         >
         <label
-          >蛋白主链<select id="figure-representation">
+          >蛋白背景<select id="figure-representation">
+            <option value="none">仅显示邻近残基</option>
             <option value="cartoon">二级结构卡通</option>
             <option value="stick">棍状</option>
             <option value="line">线框</option>
@@ -743,13 +778,28 @@
         ><label
           ><input id="figure-showSurface" type="checkbox" />显示口袋表面</label
         >
+        <label
+          ><input
+            id="figure-showInteractions"
+            type="checkbox"
+          />显示关键相互作用</label
+        >
+        <label
+          ><input
+            id="figure-hydrophobic"
+            type="checkbox"
+          />同时显示疏水接触</label
+        >
       </div>
       <div class="viewer-tools checks">
         <label
           ><input id="figure-sidechains" type="checkbox" />显示邻近残基</label
         ><label
-          ><input id="figure-labels" type="checkbox" />标注近邻残基（最多 10
-          个）</label
+          ><input
+            id="figure-allNeighbors"
+            type="checkbox"
+          />展开所有邻近残基</label
+        ><label><input id="figure-labels" type="checkbox" />标注关键残基</label
         ><button id="figure-apply" class="primary" type="button">
           应用显示设置
         </button>
