@@ -28,10 +28,9 @@
           alt=""
           class="brand-icon"
         /><strong>DiffSBDD</strong><span>药物设计工作台</span></a
-      ><label class="sr-only" for="project">当前项目</label
+      ><label class="sr-only" for="project">保存的设计</label
       ><select id="project">
-        <option value="example">示例项目</option>
-        <option value="draft">已保存的本机草稿</option>
+        <option value="example">当前设计</option>
       </select>
       <div class="header-actions">
         <button id="load-example" class="text-button">
@@ -46,17 +45,7 @@
             src="/assets/vendor/tabler/help-circle.svg"
             alt=""
           />帮助</button
-        ><button id="local-user" class="text-button">
-          <img
-            class="avatar"
-            src="/assets/vendor/tabler/user-circle.svg"
-            alt=""
-          />本地用户<img
-            class="tiny-icon"
-            src="/assets/vendor/tabler/chevron-down.svg"
-            alt=""
-          />
-        </button>
+        ><span class="local-status">本机运行</span>
       </div>
     </header>
     <aside class="sidebar">
@@ -74,7 +63,7 @@
             class="icon"
             src="/assets/vendor/tabler/atom.svg"
             alt=""
-          />局部结构设计<span class="nav-hint">5 种模式</span>
+          />局部结构设计
         </button>
         <button class="nav-item" data-task="diversify">
           <img
@@ -90,12 +79,12 @@
             alt=""
           />性质优化
         </button>
-        <button class="nav-item" data-info="selectivity">
+        <button class="nav-item" data-view="designs">
           <img
             class="icon"
-            src="/assets/vendor/tabler/target-arrow.svg"
+            src="/assets/vendor/tabler/device-floppy.svg"
             alt=""
-          />选择性设计<span class="tag">扩展</span>
+          />已保存设计
         </button>
         <hr />
         <p class="nav-label">结果</p>
@@ -119,14 +108,14 @@
             class="icon"
             src="/assets/vendor/tabler/settings.svg"
             alt=""
-          />模型与训练</button
-        ><button class="nav-item" data-info="benchmark">
+          />模型管理</button
+        ><button class="nav-item" data-view="compare">
           <img
             class="icon"
             src="/assets/vendor/tabler/list-details.svg"
             alt=""
-          />批量基准测试</button
-        ><button class="nav-item" data-info="data">
+          />任务比较</button
+        ><button class="nav-item" data-view="prepare">
           <img
             class="icon"
             src="/assets/vendor/tabler/database.svg"
@@ -139,7 +128,7 @@
           class="icon"
           src="/assets/vendor/tabler/settings.svg"
           alt=""
-        />设置与帮助<img
+        />使用帮助<img
           class="tiny-icon"
           src="/assets/vendor/tabler/chevron-right.svg"
           alt=""
@@ -304,6 +293,10 @@
                   <input id="reference-sdf" type="file" accept=".sdf" hidden />
                   <p class="hint">没有参考配体？直接选择口袋残基。</p>
                 </div>
+                <div id="ligand-choice" hidden>
+                  <label for="detected-ligand">选择蛋白文件中的参考配体</label
+                  ><select id="detected-ligand"></select>
+                </div>
                 <div id="custom-input" hidden>
                   <select id="pocket-type" aria-label="口袋定义方式">
                     <option value="reference">PDB 内配体编号</option>
@@ -342,10 +335,8 @@
                   <label for="initial-sdf">起始分子 / 片段三维 SDF</label
                   ><input id="initial-sdf" type="file" accept=".sdf" /><button
                     type="button"
-                    id="inspect-pose"
+                    id="choose-result-source"
                   >
-                    预览起始结构并选择原子</button
-                  ><button type="button" id="choose-result-source">
                     从历史结果中选择
                   </button>
                 </div>
@@ -400,6 +391,19 @@
                   </button>
                 </div>
               </div>
+              <div id="fragment-toolbar" class="fragment-toolbar" hidden>
+                <select id="pocket-selection-mode" aria-label="选择对象">
+                  <option value="fragment">选择配体片段</option>
+                  <option value="pocket">选择口袋残基</option>
+                </select>
+                <select id="fragment-pick" aria-label="点选方式">
+                  <option value="ring">点选整环</option>
+                  <option value="atom">点选原子</option></select
+                ><button type="button" id="keep-scaffold">保留骨架</button
+                ><button type="button" id="keep-periphery">保留外围</button
+                ><button type="button" id="clear-fragment">清空</button
+                ><span id="fragment-count">未选择</span>
+              </div>
               <div id="pocket-viewer" aria-label="结合口袋三维预览"></div>
               <div class="viewer-legend">
                 <span><i class="legend-dot protein-dot"></i>蛋白</span
@@ -414,6 +418,11 @@
           <section class="panel generation-panel" id="generation-panel">
             <div class="panel-heading">
               <h2 id="generation-heading">生成设置</h2>
+              <div id="design-presets" class="segmented">
+                <button type="button" data-preset="quick">快速试跑</button
+                ><button type="button" data-preset="standard">常规设计</button
+                ><button type="button" data-preset="explore">更多探索</button>
+              </div>
               <button
                 id="collapse-settings"
                 class="icon-button"
@@ -429,7 +438,7 @@
             </div>
             <div id="settings-body">
               <div id="sampling-fields" class="generation-grid"></div>
-              <div class="model-grid">
+              <div class="model-grid expert-only">
                 <label
                   >训练数据<select id="model-dataset">
                     <option value="crossdocked">CrossDocked</option>
@@ -460,16 +469,14 @@
               </p>
               <p id="task-help" class="hint" hidden></p>
               <div id="inpaint-fields" hidden>
-                <label for="design-purpose">设计意图（指导保留原子选择）</label
-                ><select id="design-purpose">
-                  <option>片段生长</option>
-                  <option>片段连接</option>
-                  <option>骨架跃迁</option>
-                  <option>骨架修饰</option>
-                  <option>指定原子补全</option></select
-                ><label for="fixed-atoms">保留原子编号（从 1 开始）</label
+                <p class="hint">
+                  在右上方三维预览中点击配体保留原子；默认一次选中整个环。
+                </p>
+                <label class="expert-only" for="fixed-atoms"
+                  >保留原子编号（从 1 开始）</label
                 ><input
                   id="fixed-atoms"
+                  class="expert-only"
                   placeholder="在结果三维图点击原子，或输入 1,2,3"
                 />
                 <div id="inpaint-controls" class="field-grid"></div>
@@ -646,31 +653,123 @@
           </div>
         </div>
         <p id="library-description" class="hint"></p>
+        <div class="viewer-tools">
+          <label
+            >搜索结构或任务<input
+              id="library-search"
+              placeholder="SMILES 或任务编号" /></label
+          ><label
+            >候选范围<select id="library-filter">
+              <option value="all">所有候选</option>
+              <option value="connected">仅连通分子</option>
+            </select></label
+          ><button id="library-refresh">刷新</button>
+        </div>
+        <div class="actions">
+          <button id="library-select-page">选择本页</button
+          ><button id="library-clear">清空选择</button
+          ><button id="library-sdf">下载所选 SDF</button
+          ><button id="library-csv">下载所选性质表</button
+          ><span id="library-selection" role="status"></span>
+        </div>
         <div id="library-content" class="molecule-grid"></div>
+        <div id="library-pages" class="actions"></div>
       </section>
       <section id="models-view" class="app-view" hidden>
         <div class="page-heading">
           <div>
             <p class="breadcrumb">高级工具 / 模型</p>
-            <h1>模型与训练</h1>
+            <h1>模型管理</h1>
             <p>检查预训练模型来源、数据集和适用任务。</p>
           </div>
         </div>
+        <p id="model-verification" role="status"></p>
         <div id="model-content" class="panel"></div>
-        <section class="panel">
-          <h2>模型训练</h2>
-          <p>
-            本工作台部署的是官方预训练模型的设计推理。重新训练需要独立的
-            CrossDocked / Binding MOAD
-            训练数据和训练环境；当前未启动或模拟训练任务。
+      </section>
+
+      <section id="designs-view" class="app-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="breadcrumb">保存与继续</p>
+            <h1>已保存设计</h1>
+            <p>
+              蛋白、起始分子、口袋与参数一起保存到本机，打开后可以继续计算。
+            </p>
+          </div>
+          <button id="new-design">新建设计</button>
+        </div>
+        <div id="saved-designs" class="panel"></div>
+      </section>
+      <section id="prepare-view" class="app-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="breadcrumb">结构处理</p>
+            <h1>数据准备</h1>
+            <p>读取真实 PDB，选择需要的链和组分；保留原坐标。</p>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="actions">
+            <label
+              >蛋白 PDB<input
+                id="prepare-file"
+                type="file"
+                accept=".pdb" /></label
+            ><button id="prepare-current">使用当前蛋白</button>
+          </div>
+          <div class="viewer-tools checks">
+            <label
+              ><input
+                id="prepare-water"
+                type="checkbox"
+                checked
+              />移除水分子</label
+            ><label
+              ><input
+                id="prepare-ligands"
+                type="checkbox"
+                checked
+              />保留配体与其他非蛋白组分</label
+            ><label
+              ><input id="prepare-hydrogens" type="checkbox" />移除氢原子</label
+            >
+          </div>
+          <fieldset>
+            <legend>保留哪些链</legend>
+            <div id="prepare-chains" class="viewer-tools checks"></div>
+          </fieldset>
+          <div class="actions">
+            <button id="prepare-run" class="primary">应用处理</button
+            ><button id="prepare-download" disabled>下载处理后的 PDB</button
+            ><button id="prepare-use" disabled>用于分子设计</button>
+          </div>
+          <p id="prepare-status" role="status">
+            上传 PDB 或读取当前蛋白后开始。
           </p>
-          <a
-            href="https://github.com/arneschneuing/DiffSBDD#training"
-            target="_blank"
-            rel="noreferrer"
-            >查看官方训练流程</a
-          >
-        </section>
+          <p class="hint">
+            这里进行组分筛选，不会自动补全缺失原子、加氢或改变质子化状态。
+          </p>
+        </div>
+      </section>
+      <section id="compare-view" class="app-view" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="breadcrumb">真实计算记录</p>
+            <h1>任务比较</h1>
+            <p>
+              选择已有任务，对比有效率、不重复结构数量、QED 和
+              SA；不把这些值称为结合活性。
+            </p>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="compare-jobs" class="comparison-list"></div>
+          <div class="actions">
+            <button id="compare-run" class="primary">比较所选任务</button
+            ><button id="compare-download" disabled>下载比较表</button>
+          </div>
+          <div id="compare-output" class="table-scroll"></div>
+        </div>
       </section>
     </main>
     <footer id="action-bar" class="action-bar">
@@ -688,7 +787,7 @@
             class="icon"
             src="/assets/vendor/tabler/device-floppy.svg"
             alt=""
-          />保存草稿</button
+          />保存设计</button
         ><button
           id="generate"
           form="generate-form"
@@ -818,9 +917,28 @@
       </div>
       <p id="figure-message" class="hint" role="status"></p>
     </dialog>
+    <dialog id="save-design-dialog">
+      <form id="save-design-form">
+        <div class="panel-heading">
+          <h2>保存当前设计</h2>
+          <button type="button" class="dialog-close">关闭</button>
+        </div>
+        <label for="design-name">设计名称</label
+        ><input id="design-name" maxlength="80" required />
+        <p>结构文件、口袋和当前参数会保存在本机。再次打开即可继续。</p>
+        <div class="actions">
+          <button id="design-save-new" type="submit" class="primary">
+            另存为新设计</button
+          ><button id="design-update" type="button" disabled>
+            更新当前设计
+          </button>
+        </div>
+        <p id="design-save-message" role="status"></p>
+      </form>
+    </dialog>
     <dialog id="info-dialog">
       <div class="panel-heading">
-        <h2 id="info-title">设置与帮助</h2>
+        <h2 id="info-title">使用帮助</h2>
         <button
           type="button"
           class="dialog-close icon-button"

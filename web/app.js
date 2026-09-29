@@ -1,3 +1,7 @@
+import { setupHelp } from "./help.js";
+import { setupDesigns, refreshDesigns } from "./designs-ui.js";
+import { setupPreparation } from "./preparation-ui.js";
+import { setupCollections } from "./collections-ui.js";
 import { setupFigures } from "./figure-panel.js";
 import {
   setupShell,
@@ -6,31 +10,29 @@ import {
   notice,
   syncModelSelectors,
   renderModels,
-  updateCount,
 } from "./shell.js";
 import {
   setupPocketUI,
   readPocketInputs,
   inspectPocket,
   loadExample,
+  readInitialPose,
+  restorePocketInputs,
+  loadProtein,
+  currentProtein,
+  hasInitialPose,
 } from "./pocket-ui.js";
 import { exportEditor } from "./editor-bridge.js";
 import {
   $,
   mountControls,
   readOptions,
-  readFile,
   restoreOptions,
   syncControls,
 } from "./controls.js";
 import { api, link, labels, friendlyError } from "./api.js";
 import { renderStatus, renderMolecules, renderDetail } from "./results-ui.js";
-import {
-  showMolecule,
-  showInput,
-  showEdited,
-  setupPreview,
-} from "./preview.js";
+import { showMolecule, showEdited, setupPreview } from "./preview.js";
 const state = {
   job: null,
   selected: -1,
@@ -42,16 +44,37 @@ const state = {
   pocketReady: false,
   loadingSource: false,
   loadRevision: 0,
+  jobRevision: 0,
+  pendingJob: null,
+  saving: false,
 };
 function error(message = "") {
   $("error").hidden = !message;
   $("error").textContent = friendlyError(message);
 }
 function buttonState() {
+  $("history").disabled = state.saving;
+  const needsSource = $("task").value !== "generate";
+  const sourceReady = !needsSource || hasInitialPose();
+  const fragmentReady =
+    $("task").value !== "inpaint" || Boolean($("fixed-atoms").value.trim());
+  $("ready-label").textContent = !state.pocketReady
+    ? "请先确认口袋"
+    : !sourceReady
+      ? "请载入起始分子"
+      : !fragmentReady
+        ? "请在预览中选择保留片段"
+        : "结构与口袋已就绪";
   $("generate").disabled =
-    state.busy || state.loadingSource || !state.ready || !state.pocketReady;
+    state.busy ||
+    state.loadingSource ||
+    !state.ready ||
+    !state.pocketReady ||
+    !sourceReady ||
+    !fragmentReady;
   for (const id of ["save-edit", "optimize", "use-original"])
-    $(id).disabled = state.busy || state.loadingSource || state.selected < 0;
+    $(id).disabled =
+      state.busy || state.loadingSource || state.saving || state.selected < 0;
 }
 async function history(selectLatest = false) {
   const jobs = await api("/api/jobs");
@@ -70,7 +93,12 @@ async function history(selectLatest = false) {
       ),
     );
   if (selectLatest) await selectJob(jobs[0].id);
-  else if (state.job) $("history").value = state.job.id;
+  else if (state.pendingJob || state.job) {
+    const id = state.pendingJob || state.job.id;
+    if (![...$("history").options].some((option) => option.value === id))
+      $("history").add(new Option(`已选任务 ${id.slice(0, 8)}`, id));
+    $("history").value = id;
+  }
 }
 async function render() {
   const job = state.job,
@@ -91,10 +119,14 @@ function schedule() {
   clearTimeout(state.timer);
   if (!state.busy) return;
   state.timer = setTimeout(async () => {
+    const revision = state.jobRevision;
     try {
       await history();
+      if (revision !== state.jobRevision) return;
       if (state.job) {
-        state.job = await api(`/api/jobs/${state.job.id}`);
+        const updated = await api(`/api/jobs/${state.job.id}`);
+        if (revision !== state.jobRevision) return;
+        state.job = updated;
         await render();
       }
       schedule();
@@ -104,7 +136,12 @@ function schedule() {
   }, 2000);
 }
 async function selectJob(id) {
-  if (!id) return;
+  if (!id || state.saving) return;
+  const token = ++state.jobRevision;
+  state.pendingJob = id;
+  ++state.loadRevision;
+  state.loadingSource = true;
+  buttonState();
   setView("results");
   setStage(4);
   clearTimeout(state.timer);
@@ -112,7 +149,20 @@ async function selectJob(id) {
   state.selected = -1;
   state.fingerprint = "";
   state.source = null;
-  state.job = await api(`/api/jobs/${id}`);
+  let job;
+  try {
+    job = await api(`/api/jobs/${id}`);
+  } catch (error) {
+    if (token !== state.jobRevision) return;
+    state.pendingJob = null;
+    state.loadingSource = false;
+    buttonState();
+    throw error;
+  }
+  if (token !== state.jobRevision) return;
+  state.job = job;
+  state.pendingJob = null;
+  state.loadingSource = false;
   if (![...$("history").options].some((option) => option.value === id))
     $("history").add(
       new Option(
@@ -125,6 +175,8 @@ async function selectJob(id) {
   schedule();
 }
 async function selectMolecule(index) {
+  if (state.saving) return;
+  const job = state.job;
   const token = ++state.loadRevision;
   state.loadingSource = true;
   buttonState();
@@ -138,10 +190,11 @@ async function selectMolecule(index) {
     $("edit-message").textContent = "";
     renderMolecules(state.job, index, selectMolecule);
     renderDetail(state.job, index);
-    await showMolecule(state.job, index);
+    await showMolecule(job, index);
+    if (token !== state.loadRevision || state.job.id !== job.id) return;
     updateSource();
   } catch (e) {
-    error(e.message);
+    if (token === state.loadRevision) error(e.message);
   } finally {
     if (token === state.loadRevision) {
       state.loadingSource = false;
@@ -191,7 +244,7 @@ function renderEdits() {
 async function payload() {
   const result = { ...(await readPocketInputs()), options: readOptions() };
   if (result.options.task !== "generate" && result.mode !== "result")
-    result.initial_sdf = await readFile("initial-sdf", 1000000, "三维起始 SDF");
+    result.initial_sdf = await readInitialPose();
   return result;
 }
 $("generate-form").addEventListener("submit", async (event) => {
@@ -229,7 +282,11 @@ $("cancel").addEventListener("click", async () => {
   }
 });
 async function saveEdit(next) {
-  if (!state.job || state.selected < 0) return;
+  if (!state.job || state.selected < 0 || state.saving) return;
+  state.saving = true;
+  buttonState();
+  const notes = $("feedback").value,
+    rating = Number($("rating").value);
   error();
   $("save-edit").disabled = true;
   $("optimize").disabled = true;
@@ -240,8 +297,8 @@ async function saveEdit(next) {
       body: JSON.stringify({
         index: state.selected,
         molblock: await exportEditor(),
-        notes: $("feedback").value,
-        rating: Number($("rating").value),
+        notes,
+        rating,
       }),
     });
     $("edit-message").textContent =
@@ -268,6 +325,7 @@ async function saveEdit(next) {
     error(e.message);
     $("edit-message").textContent = "未保存，请按提示修改结构后重试。";
   } finally {
+    state.saving = false;
     buttonState();
   }
 }
@@ -299,29 +357,6 @@ for (const id of ["sort", "filter"])
   $(id).addEventListener("change", () => {
     if (state.job) renderMolecules(state.job, state.selected, selectMolecule);
   });
-$("inspect-pose").addEventListener("click", async () => {
-  error();
-  $("inspect-pose").disabled = true;
-  try {
-    const sdf = await readFile("initial-sdf", 1000000, "三维起始 SDF");
-    const inspected = await api("/api/poses/inspect", {
-      method: "POST",
-      body: JSON.stringify({ sdf }),
-    });
-    const inputs = await readPocketInputs();
-    const pdb =
-      inputs.protein_text || (await (await fetch("/api/example")).text());
-    setView("results");
-    showInput(inspected.molblock, pdb);
-    $("click-mode").value = "select";
-    $("viewer-note").textContent =
-      `起始结构包含 ${inspected.atoms} 个重原子、${inspected.fragments} 个片段。请点击要保留的原子，或输入编号。`;
-  } catch (e) {
-    error(e.message);
-  } finally {
-    $("inspect-pose").disabled = false;
-  }
-});
 setupFigures();
 mountControls();
 setupPreview();
@@ -341,13 +376,51 @@ setupShell({
   loadExample,
   onError: error,
   openResults: async () => {
+    const requested = state.jobRevision;
     await history();
-    if (!state.job) {
+    if (!state.job && requested === state.jobRevision) {
       const jobs = await api("/api/jobs");
       const latest = jobs.find((job) => job.report?.valid > 0) || jobs[0];
-      if (latest) await selectJob(latest.id);
+      if (latest && requested === state.jobRevision) await selectJob(latest.id);
     }
   },
+});
+
+$("fixed-atoms").addEventListener("change", buttonState);
+setupHelp();
+setupDesigns({
+  payload,
+  onError: error,
+  notice,
+  restore: async (request) => {
+    state.source = null;
+    restoreOptions(request.options);
+    setView("design");
+    await restorePocketInputs(request);
+    restoreOptions(request.options);
+    $("fixed-atoms").dispatchEvent(new Event("change"));
+    $("task").dispatchEvent(new Event("change"));
+    syncModelSelectors();
+  },
+  newDesign: async () => {
+    state.source = null;
+    $("task").value = "generate";
+    $("task").dispatchEvent(new Event("change"));
+    setView("design");
+    await loadExample();
+  },
+});
+setupPreparation({
+  onError: error,
+  readInputs: async () => ({ protein_text: await currentProtein() }),
+  useProtein: async (text, name) => {
+    state.source = null;
+    setView("design");
+    await loadProtein(text, name);
+  },
+});
+setupCollections({
+  onError: error,
   openResult: async (id, index) => {
     await selectJob(id);
     await selectMolecule(index);
@@ -373,6 +446,7 @@ try {
   renderModels(health.models);
   syncModelSelectors();
   await history(false);
+  await refreshDesigns();
   await loadExample();
   buttonState();
   schedule();

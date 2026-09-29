@@ -13,7 +13,7 @@
 | 工作流 | 已接入的控制和结果 |
 |---|---|
 | 从口袋生成分子 | 8 个官方模型；按 PDB 参考配体、三维 SDF 或残基列表定义口袋；指定或按口袋估计分子大小 |
-| 保留片段设计 | 在三维图点选原子或输入编号；片段生长、连接、保留外围基团后重建骨架；选择新增原子数和初始探索区域 |
+| 保留片段设计 | 三维点选整环或单原子、一键保留环骨架/外围基团；片段生长、连接、重建骨架；专业模式可输入编号 |
 | 分子多样化 | 固定起点，使用原生扰动/去噪生成结构变体；改动步数与候选数可调，不按性质择优 |
 | 性质优化 | QED 或 SA；结构改动幅度、每轮候选数、优化轮数、保留数；逐轮记录与全程最佳结构 |
 | 精细调整 | 采样步数、重新探索次数、联合模型的探索跨度、片段处理、UFF 自由构象松弛、可复现随机种子 |
@@ -22,6 +22,10 @@
 | 编辑与反馈 | Ketcher 图形编辑；生成并对齐编辑后的三维起始构象；设计理由、人工评价、版本保存和继续设计 |
 | 结果与实验记录 | SDF、MOL、性质 CSV、口袋 PDB、实验设置、原始候选；历史任务、取消、刷新后恢复查看 |
 | 生成过程 | 固定片段任务的扩散过程播放和 JSON 下载；这不是分子动力学轨迹 |
+| 保存设计 | 将蛋白、口袋、起始结构、保留原子和参数一起保存在本机；刷新后打开继续；下载完整设计 JSON |
+| 数据准备 | 选择蛋白链、去水、去氢、保留或移除非蛋白成分；下载处理后的 PDB 或直接用于设计；保持原始坐标 |
+| 分子库与任务比较 | 按结构文本/任务及连通性筛选，勾选导出 SDF/CSV；比较真实任务的有效率、不重复结构、QED/SA 和耗时 |
+| 模型管理 | 选择已安装的官方模型，实际校验权重完整性 |
 
 ### 片段约束的含义
 
@@ -68,7 +72,7 @@ bash web.sh
 
 打开 **http://127.0.0.1:7865/**。仅绑定本机回环地址。按 `Ctrl+C` 停止前台服务，正在计算的任务会取消，已有结果保留。
 
-可选环境变量见 [.env.example](.env.example)。该文件是配置示例，不会自动加载；在启动前使用 `export` 设置。默认结果位于仓库的 `runs/`，它被 Git 忽略。`DIFFSBDD_DATA_DIR` 可以指定外部私有数据目录，`DIFFSBDD_PORT` 可指定端口。
+可选环境变量见 [.env.example](.env.example)。该文件是配置示例，不会自动加载；在启动前使用 `export` 设置。默认结果位于仓库的 `runs/`，保存的设计位于其下的 `designs/`，均被 Git 忽略。`DIFFSBDD_DATA_DIR` 可以指定外部私有数据目录，`DIFFSBDD_PORT` 可指定端口。备份时请保留整个数据目录。
 
 ### Windows 的后台服务和快捷启动
 
@@ -85,12 +89,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-web.ps1
 
 ## 如何使用
 
-1. 点击“载入官方示例”直接验证，或上传自己的蛋白 PDB。参考配体的 SDF 必须已与蛋白对齐。
-2. 选择设计任务和模型。默认全原子 CrossDocked 条件模型；500 步是原模型的采样长度，减少步数可能降低或改变结果质量。
+1. 点击“载入官方示例”直接验证，或上传自己的蛋白 PDB。工作台会列出文件里的小分子，可选择一个定位口袋；没有参考配体时直接在预览上点选残基。外部参考配体的 SDF 必须已与蛋白对齐。
+2. 选择任务，再选“快速试跑 / 常规设计 / 更多探索”。默认全原子 CrossDocked 条件模型。常规从头生成尝试 10 个候选、500 步；快速试跑为 3 个、100 步，用于检查流程，可能降低结构质量。优化任务的预设会同时设置轮数、每轮数量和改动幅度。参数旁的 **?** 支持鼠标悬停、键盘聚焦和点击说明；专业模式提供更细的模型与参数控制。
 3. 查看结果卡片和三维姿势。检查分子是否连通、是否存在不合理近距离接触，再参考 QED、SA、分子量、logP、极性表面积等。
 4. 在编辑器中修改原子或键，填写设计理由并保存。选择“保存编辑版并设置下一轮”，返回设计页确认优化目标及轮数后开始。
-5. 保留片段设计可使用已有结果，或上传起始片段 SDF。点击三维原子选择保留部分；原子编号在界面中从 1 开始。
-6. 下载有效结构、性质表和实验设置。展开任务详情可查看未保留原因及原始候选。
+5. 保留片段设计可使用已有结果，或上传起始片段 SDF。在预览工具栏选择“选配体片段”，直接点选整环或单原子；橙色标记表示保留部分。也可一键保留环骨架或外围基团。稠合环会一起选择；精细调整请切换单原子。专业模式的原子编号从 1 开始。
+6. 点击“保存设计”保留完整输入，下次从顶部列表或“已保存设计”打开。下载结果可在任务页完成，也可在分子库勾选多个候选批量导出。展开任务详情可查看未保留原因及原始候选。
+
+数据准备仅做结构筛选，不会补全缺失原子或分配质子化状态。任务比较汇总已有计算结果，不代表论文基准评测。保存设计需要有效的蛋白、口袋及任务所需的起始结构；旧版本仅存参数的浏览器草稿不会自动转换为完整设计。
 
 ## 结构显示与出图
 
@@ -124,7 +130,7 @@ Windows 同样可以使用：
 .\diffsbdd.cmd generate -Protein .\examples\3rfm.pdb -Reference A:330 -Settings .\examples\generate.json
 ```
 
-API 入口：`GET /api/health`、`GET/POST /api/jobs`、`GET /api/jobs/{id}`、`POST /api/jobs/{id}/cancel`、`POST /api/jobs/{id}/edits`、`POST /api/poses/inspect`、`POST /api/pockets/inspect`。写请求需 JSON 和 `X-DiffSBDD-Client: local-ui`；浏览器请求还需匹配本机 Origin。不要把本服务直接开放到局域网或公网，它没有多人认证系统。
+API 入口：`GET /api/health`、`GET/POST /api/jobs`、`GET /api/jobs/{id}`、`POST /api/jobs/{id}/cancel`、`POST /api/jobs/{id}/edits`、`POST /api/poses/inspect`、`POST /api/pockets/inspect`。保存设计使用 `GET/POST /api/designs`、`GET/PUT /api/designs/{id}` 和 `GET /api/designs/{id}/export`；更新需提供当前 `revision`，过期更新返回 409。附加工具入口为 `POST /api/structures/prepare`、`POST /api/library/export`、`POST /api/jobs/compare`、`POST /api/models/{id}/verify`。写请求需 JSON 和 `X-DiffSBDD-Client: local-ui`；浏览器请求还需匹配本机 Origin。不要把本服务直接开放到局域网或公网，它没有多人认证系统。
 
 ## 测试与开发
 
@@ -138,14 +144,20 @@ bash -n install.sh web.sh
 # 前端只需 Node.js 22+；日常运行不需要 Node.js
 npm ci
 npm test
-# 可选：四种视口的实际浏览器布局验证
-# PLAYWRIGHT_CHANNEL=chrome node tests/layout.mjs
 npx prettier --check 'web/*.js' 'web/**/*.css' 'web/*.html' 'tests/*.mjs'
 
 # 对正在运行的真实 GPU 服务进行浏览器端到端测试
 npx playwright install chromium
 npm run test:e2e
 # 或使用本机 Chrome：PLAYWRIGHT_CHANNEL=chrome npm run test:e2e
+
+# 不启动 GPU 推理的真实页面测试（两个终端）
+# 终端一，使用安装好的 Python 环境：
+/opt/diffsbdd/venv/bin/python -m tests.serve_fixture
+# 终端二：
+DIFFSBDD_TEST_URL=http://127.0.0.1:17865 npm run test:e2e -- --ui-only
+DIFFSBDD_TEST_URL=http://127.0.0.1:17865 node tests/pages.mjs
+DIFFSBDD_TEST_URL=http://127.0.0.1:17865 node tests/layout.mjs
 ```
 
 浏览器测试会真实生成分子、编辑结构、运行优化、下载结果、播放生成过程并取消一个任务，产生的测试数据保存在被忽略的 `runs/` 和 `test-results/`。请等待其他计算任务结束后运行。
@@ -159,12 +171,15 @@ CPU CI 的 `--ui-only` 模式使用明确标注的真实历史生成样例，仅
 | 层 | 职责 |
 |---|---|
 | `web/app.js` / `shell.js` / `controls.js` | 任务状态、页面组合及药化参数表单 |
+| `web/presets.js` / `help.js` | 有边界的任务预设和可访问的药化术语说明 |
+| `web/designs-ui.js` / `preparation-ui.js` / `collections-ui.js` | 保存设计、PDB 准备、分子库和任务比较，各自通过 API 操作真实数据 |
 | `web/pocket-ui.js` / `pocket-viewer.js` / `preview.js` | 口袋选择、输入预览与候选结构交互 |
 | `web/molecular-style.js` / `figure-panel.js` | 两个视图共用的科学显示规范、视角与高清出图 |
 | `web/editor-bridge.js` | 唯一 Ketcher 适配边界，异步导入导出 Molfile |
 | `web/styles/` | 基础、布局、设计页、结果页与响应式样式 |
 | `contracts.py` / `options.py` | HTTP 输入及模型任务的统一配置契约 |
 | `web.py` / `jobs.py` | 本机安全边界、持久化任务、单任务调度、子进程取消 |
+| `workspace_api.py` / `designs.py` / `preparation.py` / `collections.py` | 薄路由、设计快照与版本冲突、PDB 筛选、真实结果导出/比较；复用统一输入和结果契约 |
 | `generation.py` / `sampling.py` / `optimization.py` | 逐分子推理、官方模型适配、片段约束和多轮选择 |
 | `inputs.py` / `pockets.py` / `editing.py` / `results.py` | 真实结构校验、编辑后的构象生成/对齐、化学性质和结果保存 |
 | `runtime.py` / `registry.py` | 固定模型与源码的加载及来源校验 |

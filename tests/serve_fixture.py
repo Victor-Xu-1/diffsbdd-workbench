@@ -6,6 +6,8 @@ without --ui-only against a real installed GPU workbench.
 
 import os
 import signal
+import shutil
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -53,6 +55,15 @@ def main():
                 "fixture": "Real generated molecule; UI test fixture, not a new inference run.",
             },
         )
+        second = directory.parent / ("e" * 32)
+        shutil.copytree(directory, second)
+        metadata = json.loads((second / "job.json").read_text())
+        metadata.update(
+            id="e" * 32,
+            created_at="2026-09-28T00:00:00Z",
+            fixture="Explicit second UI fixture for navigation races; not a new inference run.",
+        )
+        write_report(second / "job.json", metadata)
         environment = dict(
             os.environ, DIFFSBDD_DATA_DIR=temporary, DIFFSBDD_PORT="17865"
         )

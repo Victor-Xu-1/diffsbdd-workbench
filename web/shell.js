@@ -1,6 +1,9 @@
+import { presetOptions } from "./presets.js";
+import { refreshLibrary, refreshComparison } from "./collections-ui.js";
+import { refreshDesigns } from "./designs-ui.js";
 /** Navigation and view composition; molecular data and model calls live elsewhere. */
-import { $, schema, syncControls } from "./controls.js";
-import { api, labels } from "./api.js";
+import { $, syncControls, restoreOptions } from "./controls.js";
+import { api } from "./api.js";
 let callbacks;
 const safely =
   (action) =>
@@ -52,25 +55,24 @@ function info(title, paragraphs) {
   }
   $("info-dialog").showModal();
 }
-const guidance = {
-  selectivity: [
-    "选择性设计",
-    "当前官方推理接口没有开箱即用的选择性预测或优化目标。本版不会将 QED、SA 或几何接触解释成选择性。",
-    "可对不同蛋白口袋分别生成候选并保存记录；跨靶点亲和力比较需要另外经过验证的评分流程。",
-  ],
-  benchmark: [
-    "批量基准测试",
-    "本版提供真实模型与浏览器回归脚本；完整科研基准还需要 CrossDocked / Binding MOAD 测试集、数据划分和评估协议。",
-    "仓库的 tests/gpu_smoke.py 可运行本机模型功能验证。未安装科研测试集时，不会生成或模拟论文基准分数。",
-  ],
-  data: [
-    "数据准备",
-    "蛋白：PDB，最多 5 MB。参考配体：单分子三维 SDF，坐标必须与蛋白一致。起始片段可以包含多个不相连片段。",
-    "模型口袋使用标准氨基酸，默认参考配体周围 8 Å。也可在三维图和残基列表中手动指定口袋。",
-    "当前输入范围为最多 1000 个口袋重原子、最多 80 个配体重原子。保留完整片段时需完整选择芳香环。",
-  ],
-};
 function taskHeading() {
+  const presetLabels = {
+    quick: "快速试跑",
+    standard: "常规设计",
+    explore: "更多探索",
+  };
+  for (const button of document.querySelectorAll("[data-preset]")) {
+    const options = presetOptions($("task").value, button.dataset.preset);
+    const attempts = options.population
+      ? options.population * options.rounds
+      : options.count;
+    button.textContent = `${presetLabels[button.dataset.preset]} · ${attempts} 个`;
+    button.title =
+      $("task").value === "optimize"
+        ? `每轮 ${options.population} 个，进行 ${options.rounds} 轮，保留 ${options.survivors} 个继续探索。`
+        : `尝试 ${attempts} 个候选。${$("task").value === "diversify" ? `改动幅度 ${options.change_steps}。` : `采样 ${options.steps} 步。`}有效结构数量取决于化学检查。`;
+  }
+
   const task = $("task").value;
   $("page-title").textContent = {
     generate: "新建设计任务",
@@ -103,61 +105,6 @@ export function updateCount() {
     $("task").value === "optimize"
       ? `开始优化 ${total} 个候选`
       : `开始生成 ${total} 个分子`;
-}
-function saveDraft() {
-  const names = [
-    ...schema.map(([id]) => id),
-    "task",
-    "model",
-    "size_mode",
-    "center",
-    "objective",
-    "fragment_policy",
-    "bond_mode",
-    "fixed-atoms",
-    "trajectory",
-    "design-purpose",
-  ];
-  const fields = Object.fromEntries(
-    names
-      .filter((id) => $(id))
-      .map((id) => [
-        id,
-        $(id).type === "checkbox" ? $(id).checked : $(id).value,
-      ]),
-  );
-  try {
-    localStorage.setItem(
-      "diffsbdd.draft.v1",
-      JSON.stringify({ version: 1, fields }),
-    );
-    notice(
-      "草稿已保存到本机浏览器。草稿保存设计设置；上传结构请在继续时重新确认。",
-    );
-  } catch (error) {
-    notice("浏览器无法保存草稿，请检查是否禁用了本地存储。");
-  }
-}
-function restoreDraft() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("diffsbdd.draft.v1"));
-    if (!saved || saved.version !== 1) throw new Error();
-    for (const [id, value] of Object.entries(saved.fields)) {
-      const node = $(id);
-      if (node && node.closest("#generate-form") && node.type !== "file") {
-        node.type === "checkbox"
-          ? (node.checked = Boolean(value))
-          : (node.value = value);
-      }
-    }
-    syncControls();
-    syncModelSelectors();
-    taskHeading();
-    setView("design");
-    notice("已恢复草稿设置，请确认当前蛋白、口袋和起始结构后再开始。");
-  } catch (error) {
-    notice("当前没有可读取的草稿，请先保存一份设计设置。");
-  }
 }
 export function syncModelSelectors() {
   const [dataset, representation, strategy] = $("model").value.split("_");
@@ -206,7 +153,28 @@ export function renderModels(models) {
       syncModelSelectors();
       setView("design");
     });
-    td.append(button);
+    const verify = document.createElement("button");
+    verify.textContent = "检查模型完整性";
+    verify.disabled = !model.installed;
+    verify.dataset.verifyModel = model.id;
+    verify.addEventListener(
+      "click",
+      safely(async () => {
+        verify.disabled = true;
+        try {
+          const result = await api(`/api/models/${model.id}/verify`, {
+            method: "POST",
+            body: "{}",
+          });
+          $("model-verification").textContent = result.valid
+            ? "模型文件完整，可用于计算。"
+            : "模型文件与官方版本不一致，请重新安装。";
+        } finally {
+          verify.disabled = !model.installed;
+        }
+      }),
+    );
+    td.append(button, verify);
     row.append(td);
     table.append(row);
   }
@@ -217,38 +185,33 @@ export function renderModels(models) {
     "仅加载经过 SHA-256 校验的官方权重。模型结构和权重保持原样；来源和校验值保存在模型清单中。";
   $("model-content").append(attribution);
 }
-async function renderLibrary() {
-  const jobs = await api("/api/jobs?limit=100");
-  $("library-content").replaceChildren();
-  $("library-description").textContent =
-    "最近 100 个任务中的候选结构。选择分子可查看、编辑与下载。";
-  for (const job of jobs)
-    for (const [index, molecule] of (job.report?.molecules || []).entries()) {
-      const card = document.createElement("button");
-      card.className = "molecule";
-      const image = document.createElement("img");
-      image.src = `/api/jobs/${job.id}/molecules/${index}.svg`;
-      image.alt = `候选分子 ${index + 1}`;
-      image.loading = "lazy";
-      const title = document.createElement("strong");
-      title.textContent = `${job.id.slice(0, 8)} · 分子 ${index + 1}`;
-      const facts = document.createElement("p");
-      facts.textContent = `QED ${molecule.qed} · MW ${molecule.molecular_weight} · ${labels[job.status]}`;
-      card.append(image, title, facts);
-      card.addEventListener(
-        "click",
-        safely(() => callbacks.openResult(job.id, index)),
-      );
-      $("library-content").append(card);
-    }
-  if (!$("library-content").childElementCount) {
-    const p = document.createElement("p");
-    p.textContent = "尚无有效候选。完成一次生成后，结构会出现在这里。";
-    $("library-content").append(p);
-  }
+function applyPreset(level, announce = false) {
+  const fixed = $("fixed-atoms").value;
+  restoreOptions({
+    ...presetOptions($("task").value, level),
+    task: $("task").value,
+  });
+  $("fixed-atoms").value = fixed;
+  $("fixed-atoms").dispatchEvent(new Event("change"));
+  document
+    .querySelectorAll("[data-preset]")
+    .forEach((node) =>
+      node.classList.toggle("selected", node.dataset.preset === level),
+    );
+  updateCount();
+  if (announce)
+    notice(
+      level === "quick"
+        ? "快速试跑：先少量验证输入，正式探索建议选择常规设计。"
+        : "已应用预设，可以直接开始；专业模式可进一步调整。",
+    );
 }
 export function setupShell(handlers) {
   callbacks = handlers;
+  for (const button of document.querySelectorAll("[data-preset]"))
+    button.addEventListener("click", () =>
+      applyPreset(button.dataset.preset, true),
+    );
   $("mobile-menu").addEventListener("click", () => {
     const expanded = document.body.classList.toggle("navigation-open");
     $("mobile-menu").setAttribute("aria-expanded", String(expanded));
@@ -257,6 +220,7 @@ export function setupShell(handlers) {
     button.addEventListener("click", () => {
       $("task").value = button.dataset.task;
       $("task").dispatchEvent(new Event("change"));
+      applyPreset("standard");
       setView("design");
       if (button.dataset.task !== "generate")
         notice("请上传起始结构，或在“任务与结果”中选择分子继续设计。");
@@ -265,6 +229,9 @@ export function setupShell(handlers) {
   );
   $("task").addEventListener("change", () => {
     taskHeading();
+    document
+      .querySelectorAll("[data-preset]")
+      .forEach((node) => node.classList.remove("selected"));
     syncModelSelectors();
   });
   document.querySelectorAll("[data-view]").forEach((button) =>
@@ -274,18 +241,13 @@ export function setupShell(handlers) {
         const view = button.dataset.view;
         setView(view);
         if (view === "results") await callbacks.openResults();
-        if (view === "library") await renderLibrary();
+        if (view === "library") await refreshLibrary();
+        if (view === "designs") await refreshDesigns();
+        if (view === "compare") await refreshComparison();
       }),
     ),
   );
-  // Dialog content is text-only; no uploaded or stored data becomes HTML.
-  document.querySelectorAll("[data-info]").forEach((button) => {
-    button.onclick = () => {
-      const [title, ...paragraphs] = guidance[button.dataset.info];
-      info(title, paragraphs);
-    };
-  });
-  for (const id of ["help-button", "settings-help", "local-user"])
+  for (const id of ["help-button", "settings-help"])
     $(id).addEventListener("click", () =>
       info("设置与帮助", [
         "本机计算：结构、结果和反馈保存在本地，无需登录或云端模型 API。",
@@ -300,12 +262,14 @@ export function setupShell(handlers) {
       button.addEventListener("click", () => button.closest("dialog").close()),
     );
   $("guided-mode").addEventListener("click", () => {
+    document.body.classList.remove("expert");
     $("advanced-settings").open = false;
     $("guided-mode").classList.add("selected");
     $("expert-mode").classList.remove("selected");
     $("breadcrumb").textContent = "01 / 引导模式";
   });
   $("expert-mode").addEventListener("click", () => {
+    document.body.classList.add("expert");
     $("advanced-settings").open = true;
     $("expert-mode").classList.add("selected");
     $("guided-mode").classList.remove("selected");
@@ -324,15 +288,6 @@ export function setupShell(handlers) {
     safely(async () => {
       setView("design");
       await callbacks.loadExample();
-    }),
-  );
-  $("save-draft").addEventListener("click", saveDraft);
-  $("project").addEventListener(
-    "change",
-    safely(async () => {
-      $("project").value === "draft"
-        ? restoreDraft()
-        : await callbacks.loadExample();
     }),
   );
   for (const id of ["count", "population", "rounds"])
@@ -361,7 +316,6 @@ export function setupShell(handlers) {
           setView("results");
           await callbacks.openResults();
         } else {
-          setStage(step);
           $(step === 3 ? "generation-panel" : "input-body").scrollIntoView({
             behavior: "smooth",
             block: "center",
@@ -372,4 +326,5 @@ export function setupShell(handlers) {
   );
   syncModelSelectors();
   taskHeading();
+  applyPreset("standard");
 }

@@ -126,7 +126,18 @@ def preview_pocket(request, manager):
             reference = ligand_stream.getvalue()
         elif prepared.initial:
             reference, format_name = prepared.initial.read_text(), "sdf"
+        initial = read_pose(prepared.initial) if prepared.initial else None
+        from rdkit.Chem.Scaffolds import MurckoScaffold
+
+        scaffold = MurckoScaffold.GetScaffoldForMol(initial) if initial else None
         return {
+            "initial": Chem.MolToMolBlock(initial) if initial else "",
+            "rings": [list(r) for r in initial.GetRingInfo().AtomRings()]
+            if initial
+            else [],
+            "scaffold_atoms": list(initial.GetSubstructMatch(scaffold))
+            if scaffold and scaffold.GetNumAtoms()
+            else [],
             "protein": prepared.protein.read_text(),
             "pocket": stream.getvalue(),
             "reference": reference,

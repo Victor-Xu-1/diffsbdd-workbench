@@ -59,8 +59,13 @@ try {
     () => document.querySelector("#pocket-viewer").dataset.ready === "true",
   );
   await page.locator("#save-draft").click();
+  await page.locator("#design-name").fill(`Browser design ${Date.now()}`);
+  await page.locator("#design-save-new").click();
+  await page.locator("#save-design-dialog").waitFor({ state: "hidden" });
   assert.match(await page.locator("#notice").innerText(), /已保存/);
-  check("real pocket parsing, manual residue confirmation and settings draft");
+  check(
+    "real pocket parsing, manual residue confirmation and portable saved design",
+  );
   await page.locator('[data-figure="pocket"]').click();
   await page.locator("#figure-sidechains").check();
   await page.locator("#figure-labels").check();
@@ -216,6 +221,7 @@ try {
           "口袋已确认",
     );
     await page.locator('[data-task="inpaint"]').click();
+    await page.locator("#expert-mode").click();
     await page.locator("#size_mode").selectOption("fixed");
     const data = await (
       await context.request.get(`${base}/api/jobs/${parent}`)

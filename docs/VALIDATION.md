@@ -2,7 +2,34 @@
 
 Local release verification, 2026-09-29 (UTC). Hardware: Windows 11 / Ubuntu WSL2, NVIDIA RTX 5060 Laptop 8151 MiB, 32 GB host RAM. Python 3.10.20, PyTorch 2.7.1+cu128. This records observed behavior; it is not a drug-discovery benchmark or a guarantee of model validity for other targets.
 
-## Scope and acceptance criteria
+## Version 0.2 operational-page correction
+
+Baseline: `eaf6ae4925719a08ce5a221ecb941adbf3807eb9`. No model, checkpoint, dependency or upstream-patch change. Development used an isolated worktree and port 17865; production data was not copied into test fixtures.
+
+| Change | Risk | Acceptance and evidence |
+|---|---|---|
+| Remove informational-only selectivity/training/benchmark navigation | Implied unsupported capability | Real browser checks absent controls; each remaining tool has an actual operation |
+| Task presets and Chinese parameter help | Hidden incorrect options, inaccessible explanation | Six frontend behavior tests; Chrome verifies applied count/steps, hover/focus/tap and dismissal |
+| Saved designs | Lost uploads, wrong atom mask, stale updates | Real API creation/open/export/409; new store instance restores input; RDKit confirms fragment bonds, coordinates and mask; browser reload/reopen |
+| PDB preparation | Changed coordinates, stale output | BioPython checks atom accounting, chain validation and exact retained coordinates; browser downloads real PDB and rejects delayed output after options change |
+| Direct selection | Wrong residue or ligand atom indices | Real canvas residue/ring selection, RDKit ring/scaffold data, portable fragment roundtrip |
+| Candidate collection and comparison | Wrong file/index or invented statistics | RDKit-parsed selected SDF, CSV, actual report-derived ratios; real browser export and comparison |
+| Result selection and editor import | Slow requests overwrite current job | Two explicit UI fixtures plus delayed real HTTP-response regression; serialized Ketcher imports; full GPU edit/feedback workflow |
+
+Commands run for this correction:
+
+- `python -m unittest discover -s tests -v`: **41 passed**, including real HTTP, chemistry, persistence and failure paths.
+- `npm test`: **6 passed**.
+- `DIFFSBDD_TEST_URL=http://127.0.0.1:17865 PLAYWRIGHT_CHANNEL=chrome node tests/pages.mjs`: **passed**. Includes checksum calculation against an installed official model. CPU CI skips only that installed-weight operation when weights are absent.
+- `DIFFSBDD_TEST_URL=http://127.0.0.1:17865 PLAYWRIGHT_CHANNEL=chrome node tests/browser.mjs`: **passed with actual CUDA inference**. Jobs `c3faff9fa632465ca73bd75340fc9438` (generation), `31c6a8919b534c2abdffc1bdf7a5ca06` (two-round optimization), `b1c1b95e9cb4425bbb39a5a37c79d7e7` (inpainting). Also verified graphical editing, feedback persistence, downloads, trajectory and cancellation. Later changes were confined to preparation response guards, help text and dead callback removal; their affected browser paths were retested.
+- Same browser command with `--ui-only`: **passed** using a labelled real generated fixture, without claiming a new GPU calculation.
+- `node tests/layout.mjs` with the same URL/channel: **passed**, widths 1536, 1024, 768 and 390; desktop and mobile captures manually reviewed.
+
+Review covered API size/type/identifier boundaries, origin protections inherited by new routes, atomic saved-design writes and revision conflicts, safe text rendering, bounded export/compare sizes, async source-selection races and object-URL cleanup. There is no new outbound URL fetch, authentication system, database, model loader or LLM integration. Existing jobs are not migrated or modified; `designs/` is additive. No dependency changes require repeating the eight-checkpoint compatibility matrix; the earlier evidence below remains historical.
+
+## Version 0.1 baseline validation (historical)
+
+### Scope and acceptance criteria
 
 | Change | Main risk | Actual validation / acceptance |
 |---|---|---|
@@ -14,7 +41,7 @@ Local release verification, 2026-09-29 (UTC). Hardware: Windows 11 / Ubuntu WSL2
 | Local API and persistence | Origin bypass, path traversal, partial writes, concurrent feedback | Real Uvicorn integration, rejected origins and requests, allowlisted downloads, atomic JSON updates, concurrent edit saves, isolated cross-process inference lock |
 | New reference-aligned UI | Broken navigation, hidden controls, stale readiness | Real Chrome desktop/mobile tests, residue dialog, draft, editor, download, source reuse, trajectory playback and cancellation; no browser console/page errors |
 
-## Commands actually run
+### Commands actually run for the baseline
 
 - `python -m unittest discover -s tests -v`: **34 tests passed**, real chemistry and local HTTP included.
 - `npm test`: **5 frontend behavior tests passed** (selection indexing, candidate identity, user error text, figure validation and element styles).
@@ -31,13 +58,14 @@ Test artifacts, logs, GPU output and feedback stay in ignored local directories.
 
 ## Practical limits
 
-- One inference job at a time; small batches are sequential. The default requests three candidates, not the illustrative 100 in the UI design reference.
+- One inference job at a time; candidates are sequential. Version 0.2 defaults to ten candidates; quick trial requests three.
 - Strict fragment checks can reject all candidates for some masks, sizes and seeds. Raw attempted structures and rejection reasons remain available. Connectivity is measured, not guaranteed.
 - QED, SA and distance summaries are not affinity, selectivity, ADMET, synthetic accessibility experiments or binding-pose validation.
 - Ketcher is the unmodified official standalone editor. Its native chemistry tooltips use English; surrounding workflows, settings and feedback use medicinal-chemistry Chinese.
-- Full research training, dataset curation and paper benchmark runs were not executed: their datasets and training resources are outside this 8 GB inference deployment. The corresponding sidebar entries explain this scope rather than reporting simulated jobs or scores.
+- Full research training, dataset curation, selectivity design and paper benchmark runs are outside this deployment and have no operational sidebar entries. Task comparison summarizes existing runs only. PDB preparation filters coordinates; it does not rebuild missing atoms or assign protonation.
+- The library displays the most recent 100 jobs, exports at most 100 selected molecules and compares at most 20 jobs. Saved designs are limited to 500 records and require valid task inputs; old parameter-only browser drafts are not converted automatically.
 - Figure styles are configurable scientific conventions, not journal certification. Label overlap and the final physical publication size should be reviewed for each selected camera and structure.
 
-## Clean checkout and installation
+## Baseline clean checkout and installation (historical)
 
 A separate Git clone under a temporary Linux directory was installed into a new CPU virtual environment using the production dependency constraints: 34 tests passed and all 53 vendor hashes matched. Re-running the documented full installer verified all eight weight files, 91 installed packages, the pinned upstream patch, real CUDA/scatter and chemistry kernels. The Windows background-service installer also completed and its HTTP readiness check passed.

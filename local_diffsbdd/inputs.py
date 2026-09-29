@@ -5,6 +5,7 @@ import re
 
 import numpy as np
 from Bio.PDB import PDBParser
+from Bio.PDB.PDBExceptions import PDBConstructionException
 from Bio.PDB.Polypeptide import is_aa
 from rdkit import Chem
 
@@ -27,7 +28,10 @@ def validate_pocket(protein, reference=None, residue_ids=None):
     pdb = input_file(protein, ".pdb")
     if bool(reference) == bool(residue_ids):
         raise ValueError("Specify exactly one reference ligand or residue list.")
-    structure = PDBParser(QUIET=True).get_structure("input", str(pdb))
+    try:
+        structure = PDBParser(QUIET=True).get_structure("input", str(pdb))
+    except (PDBConstructionException, ValueError, IndexError) as exc:
+        raise ValueError("无法读取 PDB 坐标，请检查原子记录和文件格式。") from exc
     models = list(structure.get_models())
     if not models:
         raise ValueError("PDB contains no atoms/models.")

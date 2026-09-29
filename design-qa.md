@@ -1,6 +1,6 @@
 # Design QA — passed
 
-Reviewed the supplied 1536 × 1024 reference and the running implementation side by side at the same viewport on 2026-09-29. Repeated the comparison after changing the scientific renderer. The reference image is not redistributed.
+Reviewed the supplied 1536 × 1024 reference and the running implementation at the same viewport on 2026-09-29. Rechecked desktop and narrow-screen captures for the 0.2 operational-page changes. The reference image is not redistributed.
 
 ## Reference alignment
 
@@ -23,6 +23,10 @@ Reviewed the supplied 1536 × 1024 reference and the running implementation side
 - Centralized scientific styles, controlled camera reset and high-resolution label texture regeneration; enlarged PNG exports preserve crisp labels rather than enlarging only a low-resolution screenshot.
 - Corrected stale source selection/readiness and separated asynchronous editor loading from generation readiness.
 - Replaced missing icon references, corrected surface worker CSP and fixed a real early-response connection-reset failure at the API boundary.
-- Kept true calculated residue counts, local user identity, and a three-candidate default suited to 8 GB inference instead of copying illustrative data from the reference.
+- Kept true calculated residue counts and replaced the apparent account menu with a static local-runtime indicator. The default is ten sequential candidates; quick trial offers three. No illustrative result counts are copied from the reference.
+- Removed selectivity, training and paper-benchmark navigation. Saved designs, actual task comparison and PDB preparation now have working persistence or downloadable outputs.
+- Added choice-based task presets and parameter explanations on hover, focus and tap, including Escape/outside-click dismissal. The guided view hides model internals; advanced controls remain available.
+- Added direct protein-residue and ligand-ring/atom selection. Ring/scaffold indices come from RDKit; retained fragments have visible selection state.
+- Fixed delayed history responses overwriting a newer molecule selection, and prevented outdated PDB preparation from becoming usable after an option changes.
 
-Automated verification is in `tests/browser.mjs`, `tests/layout.mjs` and `tests/frontend.test.mjs`. The documentation screenshot `docs/workbench.png` is an actual capture of the public example; diagnostic screenshots and user job data are ignored. The molecular drawing's exact geometry and camera naturally depend on the chosen structure; this QA does not claim an identical raster image or journal certification.
+Automated verification is in `tests/browser.mjs`, `tests/pages.mjs`, `tests/layout.mjs` and `tests/frontend.test.mjs`. The documentation screenshot `docs/workbench.png` is an actual capture of the public example; diagnostic screenshots and user job data are ignored. The molecular drawing's exact geometry and camera naturally depend on the chosen structure; this QA does not claim an identical raster image or journal certification.

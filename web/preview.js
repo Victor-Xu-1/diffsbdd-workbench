@@ -9,7 +9,7 @@ import {
 } from "./molecular-style.js";
 import { registerFigure } from "./figure-panel.js";
 import { loadEditor } from "./editor-bridge.js";
-import { $, parseAtomNumbers } from "./controls.js";
+import { $, parseAtomNumbers, setAtomSelection } from "./controls.js";
 let figureSettings,
   surfaceTask = Promise.resolve();
 let comparisonModel = null;
@@ -47,10 +47,7 @@ function clicked(atom) {
     selected.has(atom.index)
       ? selected.delete(atom.index)
       : selected.add(atom.index);
-    $("fixed-atoms").value = [...selected]
-      .sort((a, b) => a - b)
-      .map((i) => i + 1)
-      .join(",");
+    setAtomSelection([...selected]);
     style();
     $("viewer-note").textContent =
       `已保留 ${selected.size} 个原子；橙色标记。编号也可在左侧输入。`;
@@ -202,6 +199,7 @@ export async function showMolecule(job, index) {
   $("trajectory-controls").hidden = true;
   trajectory = null;
   await loadEditor(ligand);
+  if (current !== revision) return;
   scene();
   if (job.status !== "running" && job.report?.settings?.trajectory) {
     const result = await fetch(`/api/jobs/${job.id}/files/trajectory.json`);
@@ -212,21 +210,6 @@ export async function showMolecule(job, index) {
       $("trajectory-frame").value = 0;
     }
   }
-}
-export function showInput(molblock, pdb) {
-  ++revision;
-  stopAnimation();
-  ligand = molblock;
-  protein = pdb;
-  pocket = pdb;
-  initial = "";
-  $("compare-input").disabled = true;
-  $("compare-input").checked = false;
-  selected.clear();
-  $("fixed-atoms").value = "";
-  $("preview-panel").hidden = false;
-  $("editing-panel").hidden = true;
-  scene();
 }
 export async function showEdited(job, edit) {
   stopAnimation();

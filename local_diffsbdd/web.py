@@ -16,7 +16,9 @@ from .jobs import JobManager, PACKAGE
 from .runtime import CHECKPOINT, COMMIT
 from .contracts import GenerationInput, EditInput
 from .registry import available_models
-from .config import PORT
+from .config import PORT, DATA
+from .designs import DesignStore
+from .workspace_api import router as workspace_router
 from . import __version__
 from .build import build_identity
 from .messages import public_message, validation_message
@@ -25,11 +27,13 @@ from .messages import public_message, validation_message
 @asynccontextmanager
 async def lifespan(app):
     app.state.jobs = JobManager()
+    app.state.designs = DesignStore(DATA / "designs")
     yield
     app.state.jobs.close()
 
 
 app = FastAPI(title="DiffSBDD Local", docs_url=None, redoc_url=None, lifespan=lifespan)
+app.include_router(workspace_router)
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]"]
 )
