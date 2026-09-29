@@ -2,7 +2,7 @@
 
 Local release verification, 2026-09-29 (UTC). Hardware: Windows 11 / Ubuntu WSL2, NVIDIA RTX 5060 Laptop 8151 MiB, 32 GB host RAM. Python 3.10.20, PyTorch 2.7.1+cu128. This records observed behavior; it is not a drug-discovery benchmark or a guarantee of model validity for other targets.
 
-## Version 0.3 UI consolidation
+## Version 0.3 UI consolidation and molecular selection
 
 Baseline: `bf51dad6fafa8871a6ed759fccabd79170ad9425`. This change removes the remaining duplicate presentation layers, rather than cloning every reference-image module. Native inference, weights and dependencies are unchanged.
 
@@ -13,10 +13,13 @@ Baseline: `bf51dad6fafa8871a6ed759fccabd79170ad9425`. This change removes the re
 | Remove duplicate modules/controls | Necessary functions become unreachable | Browser verifies saved designs, contextual protein preparation, model choice, candidate library, comparison and the advanced section; retired DOM entries are absent and IDs are unique |
 | Unified continuation choices | Wrong molecule/task reaches native inference | Full CUDA browser run covers edit feedback, selected continuation, optimization, fixed-atom inference, trajectory and cancellation |
 | Context-specific settings in result records | Ignored defaults misrepresented as active settings | Actual native task reports rendered through the same applicability contract; original downloadable records are unchanged |
+| Shared molecular display settings and three presets | Two viewers diverge; exports omit scope/style | Real 3Dmol surfaces, labels, fractional context-radius and scope recipe roundtrip; 2400-pixel native PNG; four Chrome viewport checks and visual review |
+| Ketcher/3D atom selection | Wrong atom identity after chemistry edits; incorrect ring expansion | RDKit ring API test, atom/bond correspondence tests, actual canvas clicks reaching Ketcher and native editor selection reaching the shared mask; graphical edit invalidates correspondence until saved-pose reload |
+| Saved edit previews | Successful persistence misreported as failure; wrong parent overlaid | Real HTTP/RDKit save followed by controlled preview failure, persisted edit verification and reopening; historical edits use their actual parent molecule |
 
-Current local results: **45 backend tests**, **6 frontend tests**; operational-page Chrome suite, original UI/editor/download suite and four viewport checks passed. The layout focus regression uses actual keyboard events; the initial failure exposed pointer-modality assumptions and the mobile example button's obsolete hidden style, both corrected without reducing the assertions.
+Current local results: **45 backend tests**, **8 frontend tests**; operational-page Chrome suite, original UI/editor/download suite and four viewport checks passed. The layout focus regression uses actual keyboard events. The delayed-response regression now releases and drains an explicit interception gate before browser teardown, preserving assertions that stale history responses cannot replace the chosen job. Ruff, Prettier, compileall, shell syntax and all 53 vendor hashes passed. No vendored editor or renderer code was modified.
 
-Real GPU run: generation `d5a568ac2a93442880eeaccfde931876` (**2/2 valid**), optimization `fd924f556f5c42ef8955e825c0b4f1f0` (**6/6 valid** over two rounds), inpainting `6a8127b32d3741ba9247e91258365e9a` (**1/1 valid**) and cancellation. Commands are the README test commands, with `DIFFSBDD_TEST_URL=http://127.0.0.1:17865` and `PLAYWRIGHT_CHANNEL=chrome`. Later report-display/CSS cleanup was retested through the affected UI suites; no further inference changes were made.
+Real GPU run with the molecular selection/editor changes: generation `870b85a404234ecf98890d8a6558c39c` (**2/2 valid**), optimization `6b72babf98574d7db6d9711395246d80` (**6/6 valid** over two rounds), inpainting `afe496521dbe47e7a510d85508c5fbb1` (**1/1 valid**) and cancellation. Commands are the README test commands, with `DIFFSBDD_TEST_URL=http://127.0.0.1:17865` and `PLAYWRIGHT_CHANNEL=chrome`. A subsequent surface-scope correction and strengthened view-recipe assertions were retested through the real browser UI suite; inference code was unchanged.
 
 Compatibility: adds read-only `/api/capabilities`; existing input, job, edit and saved-design contracts remain intact. Rendering checks, text-safe DOM construction, same-origin mutation protections, and the pinned model loader remain in place. Training/full dataset evaluation remain outside the user-confirmed scope.
 

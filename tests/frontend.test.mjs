@@ -141,3 +141,41 @@ test("capability projection excludes inactive options and retains enforced nativ
   assert.equal(inpaint.relaxation, 0);
   assert.throws(() => projectOptions({ task: "optimize", model: "joint" }));
 });
+
+import {
+  selectionGroup,
+  toggleGroup,
+  editorAtomMap,
+} from "../web/molecular-selection.js";
+test("whole-ring selection includes shared rings but not a separate ring", () => {
+  const rings = [
+    [0, 1, 2],
+    [2, 3, 4],
+    [7, 8, 9],
+  ];
+  assert.deepEqual(
+    selectionGroup(1, rings, "ring").sort((a, b) => a - b),
+    [0, 1, 2, 3, 4],
+  );
+  assert.deepEqual(selectionGroup(1, rings, "atom"), [1]);
+  assert.deepEqual(toggleGroup([0, 1, 2, 7], [0, 1, 2]), [7]);
+  assert.deepEqual(toggleGroup([0, 7], [0, 1, 2]), [0, 1, 2, 7]);
+});
+test("editor correspondence checks atom order and bond identity before synchronizing IDs", () => {
+  const mol =
+    "CO\n\n\n  2  1  0  0  0  0            999 V2000\n    0.0000    0.0000    0.0000 C   0  0  0  0\n    1.5000    0.0000    0.0000 O   0  0  0  0\n  1  2  1  0  0  0  0\nM  END\n";
+  const struct = {
+    atoms: new Map([
+      [5, { label: "C" }],
+      [9, { label: "O" }],
+    ]),
+    bonds: new Map([[0, { begin: 5, end: 9, type: 1 }]]),
+  };
+  assert.deepEqual(editorAtomMap(mol, struct), [5, 9]);
+  struct.bonds.get(0).type = 2;
+  assert.equal(editorAtomMap(mol, struct), null);
+  struct.bonds.get(0).type = 1;
+  struct.atoms.get(9).label = "N";
+  assert.equal(editorAtomMap(mol, struct), null);
+  assert.equal(editorAtomMap("invalid", struct), null);
+});

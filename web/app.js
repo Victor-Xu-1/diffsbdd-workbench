@@ -26,7 +26,12 @@ import {
   syncControls,
 } from "./controls.js";
 import { api, link, labels, friendlyError } from "./api.js";
-import { renderStatus, renderMolecules, renderDetail } from "./results-ui.js";
+import {
+  renderStatus,
+  renderMolecules,
+  renderDetail,
+  renderEditedDetail,
+} from "./results-ui.js";
 import { showMolecule, showEdited, setupPreview } from "./preview.js";
 const state = {
   job: null,
@@ -80,6 +85,8 @@ function buttonState() {
   for (const id of ["save-edit", "optimize", "use-original"])
     $(id).disabled =
       state.busy || state.loadingSource || state.saving || state.selected < 0;
+  for (const button of document.querySelectorAll(".edit-row button"))
+    button.disabled = state.loadingSource || state.saving;
 }
 async function history(selectLatest = false) {
   const jobs = await api("/api/jobs");
@@ -198,7 +205,11 @@ async function selectMolecule(index) {
     if (token !== state.loadRevision || state.job.id !== job.id) return;
     updateSource();
   } catch (e) {
-    if (token === state.loadRevision) error(e.message);
+    if (token === state.loadRevision) {
+      state.selected = -1;
+      state.source = null;
+      error(e.message);
+    }
   } finally {
     if (token === state.loadRevision) {
       state.loadingSource = false;
@@ -221,28 +232,53 @@ function renderEdits() {
     text.textContent = `分子 ${edit.parent_index + 1} · 评价 ${edit.rating || "未评分"} · ${edit.notes || "无备注"} · 共同骨架偏移 ${edit.alignment_rmsd} Å`;
     const use = document.createElement("button");
     use.textContent = "预览并作为下一轮起点";
-    use.addEventListener("click", async () => {
-      try {
-        state.selected = edit.parent_index;
-        state.source = {
-          parent_job: state.job.id,
-          molecule_index: edit.parent_index,
-          edit_id: edit.id,
-        };
-        await showEdited(state.job, edit);
-        $("mode").value = "result";
-        updateSource();
-        syncControls();
-      } catch (e) {
-        error(e.message);
-      }
-    });
+    use.disabled = state.loadingSource || state.saving;
+    use.addEventListener("click", () => selectEdit(edit));
     row.append(
       text,
       link("编辑版 SDF", `/api/jobs/${state.job.id}/edits/${edit.id}.sdf`),
       use,
     );
     $("edit-history").append(row);
+  }
+}
+async function selectEdit(edit) {
+  if (state.saving || state.loadingSource) return;
+  const job = state.job,
+    token = ++state.loadRevision;
+  state.loadingSource = true;
+  buttonState();
+  error();
+  try {
+    if (
+      !(await showEdited(job, edit)) ||
+      token !== state.loadRevision ||
+      state.job.id !== job.id
+    )
+      return;
+    state.selected = edit.parent_index;
+    state.source = {
+      parent_job: job.id,
+      molecule_index: edit.parent_index,
+      edit_id: edit.id,
+    };
+    $("selected-label").textContent =
+      `编辑版 · 来源分子 ${edit.parent_index + 1}`;
+    $("edit-message").textContent =
+      "已载入保存的编辑版，可以继续编辑或用于下一轮设计。";
+    $("feedback").value = edit.notes || "";
+    $("rating").value = String(edit.rating || 0);
+    renderEditedDetail(job, edit);
+    $("mode").value = "result";
+    updateSource();
+    syncControls();
+  } catch (e) {
+    if (token === state.loadRevision) error(e.message);
+  } finally {
+    if (token === state.loadRevision) {
+      state.loadingSource = false;
+      buttonState();
+    }
   }
 }
 async function payload() {
@@ -295,8 +331,9 @@ async function saveEdit(next) {
   $("save-edit").disabled = true;
   $("optimize").disabled = true;
   $("edit-message").textContent = "正在校验结构并对齐三维起始构象…";
+  let saved = null;
   try {
-    const saved = await api(`/api/jobs/${state.job.id}/edits`, {
+    saved = await api(`/api/jobs/${state.job.id}/edits`, {
       method: "POST",
       body: JSON.stringify({
         index: state.selected,
@@ -314,8 +351,9 @@ async function saveEdit(next) {
     };
     state.job = await api(`/api/jobs/${state.job.id}`);
     renderEdits();
+    await showEdited(state.job, saved);
+    renderEditedDetail(state.job, saved);
     if (next) {
-      await showEdited(state.job, saved);
       $("mode").value = "result";
       $("task").value = $("continue-task").value;
       updateSource();
@@ -328,7 +366,9 @@ async function saveEdit(next) {
     }
   } catch (e) {
     error(e.message);
-    $("edit-message").textContent = "未保存，请按提示修改结构后重试。";
+    $("edit-message").textContent = saved
+      ? "编辑版已保存，但后续预览未完成。请在编辑记录中重新打开。"
+      : "未保存，请按提示修改结构后重试。";
   } finally {
     state.saving = false;
     buttonState();

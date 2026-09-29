@@ -2,6 +2,7 @@ import { scaleFigureLabels } from "./figure-labels.js";
 /** Figure controls, reproducible camera recipes and native WebGL PNG export. */
 import {
   FIGURE_DEFAULTS,
+  FIGURE_PRESETS,
   validateFigureSettings,
   validateViewRecipe,
 } from "./molecular-style.js";
@@ -65,6 +66,28 @@ async function png() {
   }
 }
 export function setupFigures() {
+  for (const control of document.querySelectorAll("[data-figure-preset]")) {
+    control.replaceChildren(
+      ...Object.entries(FIGURE_PRESETS).map(
+        ([id, preset]) => new Option(preset.label, id),
+      ),
+      new Option("自定义", "custom"),
+    );
+    control.value = "site";
+    control.addEventListener("change", async () => {
+      const view = views.get(control.dataset.figurePreset),
+        preset = FIGURE_PRESETS[control.value];
+      if (!view?.viewer() || !preset) return;
+      try {
+        Object.assign(view.settings, preset.settings);
+        await view.redraw();
+        view.focus?.(preset.focus);
+      } catch (error) {
+        document.getElementById("error").hidden = false;
+        document.getElementById("error").textContent = error.message;
+      }
+    });
+  }
   for (const button of document.querySelectorAll("[data-figure]"))
     button.addEventListener("click", () => openFigure(button.dataset.figure));
   $("figure-import").addEventListener("click", () =>
@@ -77,6 +100,9 @@ export function setupFigures() {
         throw new Error("请选择小于 100 KB 的视图设置 JSON。");
       const recipe = validateViewRecipe(JSON.parse(await file.text()));
       Object.assign(active.settings, recipe.settings);
+      document.querySelector(
+        `[data-figure-preset="${[...views].find(([, v]) => v === active)[0]}"]`,
+      ).value = "custom";
       await active.redraw();
       active.viewer().setView(recipe.camera);
       openFigure([...views].find(([, view]) => view === active)[0]);
@@ -102,6 +128,9 @@ export function setupFigures() {
                 : field.value;
       }
       Object.assign(active.settings, validateFigureSettings(proposed));
+      document.querySelector(
+        `[data-figure-preset="${[...views].find(([, v]) => v === active)[0]}"]`,
+      ).value = "custom";
       await active.redraw();
       $("figure-message").textContent =
         "显示设置已应用，可关闭窗口旋转结构后导出。";

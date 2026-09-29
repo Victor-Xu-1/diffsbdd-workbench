@@ -91,6 +91,22 @@ export function renderDetail(job, index) {
   pose.download = `molecule_${index + 1}.mol`;
   $("molecule-detail").append(table, smiles, pose);
 }
+export function renderEditedDetail(job, edit) {
+  const title = document.createElement("strong");
+  title.textContent = `编辑版 · 来源分子 ${edit.parent_index + 1}`;
+  const description = document.createElement("p");
+  description.textContent = `类药性 QED ${edit.qed} · 共同骨架偏移 ${edit.alignment_rmsd} Å。当前三维图与二维编辑器显示此编辑版；原始候选保留在下方。`;
+  const smiles = document.createElement("p");
+  smiles.className = "smiles";
+  smiles.textContent = `SMILES：${edit.smiles}`;
+  $("molecule-detail").replaceChildren(
+    title,
+    description,
+    smiles,
+    link("下载当前编辑版 SDF", `/api/jobs/${job.id}/edits/${edit.id}.sdf`),
+  );
+  $("selected-label").textContent = `分子 ${edit.parent_index + 1} · 编辑版`;
+}
 export function renderStatus(job, error) {
   const report = job.report || {},
     running = job.status === "running",

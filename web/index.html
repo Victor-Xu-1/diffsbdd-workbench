@@ -253,19 +253,10 @@
                       alt=""
                     />
                   </button>
-                  <div class="segmented compact">
-                    <button
-                      data-pocket-style="surface"
-                      class="selected"
-                      type="button"
-                    >
-                      表面</button
-                    ><button data-pocket-style="cartoon" type="button">
-                      卡通</button
-                    ><button data-pocket-style="stick" type="button">
-                      球棍
-                    </button>
-                  </div>
+                  <select
+                    data-figure-preset="pocket"
+                    aria-label="口袋显示方案"
+                  ></select>
                   <button
                     id="pocket-fullscreen"
                     class="icon-button"
@@ -309,8 +300,10 @@
               ></div>
               <div class="viewer-legend">
                 <span><i class="legend-dot protein-dot"></i>蛋白</span
-                ><span><i class="legend-dot ligand-dot"></i>参考配体</span
-                ><span><i class="legend-dot pocket-dot"></i>已选口袋</span
+                ><span
+                  ><i class="legend-dot ligand-dot"></i
+                  ><span id="pocket-ligand-caption">配体</span></span
+                ><span><i class="legend-dot pocket-dot"></i>选中内容</span
                 ><small id="pocket-viewer-note"
                   >拖拽旋转 · 滚轮缩放 · 点击选择残基</small
                 >
@@ -386,116 +379,119 @@
             <div id="diagnostics" class="downloads"></div>
           </details>
         </section>
-        <section id="preview-panel" class="panel" hidden>
-          <div class="panel-heading">
-            <h2>分子与口袋预览</h2>
-            <button type="button" data-figure="result">显示与出图</button>
-          </div>
-          <div class="viewer-tools">
-            <label
-              >蛋白显示<select id="protein-view">
-                <option value="pocket">仅口袋</option>
-                <option value="full">完整蛋白</option>
-                <option value="none">隐藏蛋白</option>
-              </select></label
-            ><label
-              >配体显示<select id="ligand-view">
-                <option value="stick">球棍</option>
-                <option value="sticks">棍状</option>
-                <option value="sphere">空间填充</option>
-                <option value="line">线框</option>
-              </select></label
-            ><label
-              >点击原子<select id="click-mode">
-                <option value="identify">查看编号 / 残基</option>
-                <option value="select">选择保留原子</option>
-                <option value="measure">测量两点距离</option>
-              </select></label
-            >
-          </div>
-          <div class="viewer-tools checks">
-            <label><input id="surface" type="checkbox" />口袋表面</label
-            ><label><input id="atom-labels" type="checkbox" />原子编号</label
-            ><label
-              ><input id="compare-input" type="checkbox" />叠加起始结构</label
-            ><button id="reset-view" type="button">视图复位</button
-            ><button id="clear-fixed" type="button">清除原子选择</button>
-          </div>
-          <div id="viewer" aria-label="候选分子三维预览"></div>
-          <p id="viewer-note" class="hint" aria-live="polite"></p>
-          <div id="trajectory-controls" hidden>
-            <label for="trajectory-frame">生成过程（不是分子动力学轨迹）</label
-            ><input
-              id="trajectory-frame"
-              type="range"
-              min="0"
-              max="1"
-              value="0"
-            /><span id="trajectory-label"></span
-            ><button id="trajectory-play" type="button">播放生成过程</button
-            ><button id="trajectory-exit" type="button">返回最终分子</button>
-          </div>
-          <div id="molecule-detail"></div>
-          <div class="viewer-tools">
-            <label
-              >排序<select id="sort">
-                <option value="original">生成顺序</option>
-                <option value="qed">类药性高到低</option>
-                <option value="sa">合成难度低到高</option>
-                <option value="clashes">近距离接触少到多</option>
-              </select></label
-            ><label
-              >显示<select id="filter">
-                <option value="all">全部有效结构</option>
-                <option value="connected">仅连通分子</option>
-                <option value="no-clashes">无近距离接触</option>
-              </select></label
-            >
-          </div>
-          <div id="molecules" class="molecule-grid"></div>
-        </section>
-        <section id="editing-panel" class="panel" hidden>
-          <div class="panel-heading">
-            <h2>结构编辑与设计反馈</h2>
-            <span id="selected-label" class="badge"></span>
-          </div>
-          <p class="hint">
-            Ketcher · 修改原子、化学键、环与立体化学。RDKit
-            校验并生成对齐的三维起点，原结果始终保留。
-          </p>
-          <iframe
-            id="editor"
-            src="about:blank"
-            title="Ketcher 分子编辑器"
-          ></iframe
-          ><label for="feedback">设计反馈 / 修改理由</label
-          ><textarea
-            id="feedback"
-            rows="2"
-            maxlength="3000"
-            placeholder="记录取代基、骨架和性质方面的设计考虑…"
-          ></textarea
-          ><label for="rating">人工评价</label
-          ><select id="rating">
-            <option value="0">未评分</option>
-            <option value="1">1 · 不保留</option>
-            <option value="2">2 · 需较大修改</option>
-            <option value="3">3 · 待评估</option>
-            <option value="4">4 · 值得继续</option>
-            <option value="5">5 · 优先研究</option>
-          </select>
-          <label for="continue-task">下一轮想做什么？</label
-          ><select id="continue-task"></select>
-          <div class="actions">
-            <button id="save-edit">保存编辑与反馈</button
-            ><button id="use-original">用原分子继续设计</button
-            ><button id="optimize" class="primary">
-              保存编辑版并设置下一轮
-            </button>
-          </div>
-          <p id="edit-message" aria-live="polite"></p>
-          <div id="edit-history"></div>
-        </section>
+        <div class="results-workspace">
+          <section id="preview-panel" class="panel" hidden>
+            <div class="panel-heading">
+              <h2>分子与口袋预览</h2>
+              <button type="button" data-figure="result">显示与出图</button>
+            </div>
+            <div class="viewer-tools">
+              <label
+                >显示方案<select
+                  data-figure-preset="result"
+                  aria-label="结果显示方案"
+                ></select></label
+              ><label
+                >选择单位<select id="result-pick">
+                  <option value="ring">整环 / 稠合环</option>
+                  <option value="atom">单个原子</option>
+                </select></label
+              >
+              <label
+                >点击原子<select id="click-mode">
+                  <option value="identify">查看编号 / 残基</option>
+                  <option value="select">选择保留原子</option>
+                  <option value="measure">测量两点距离</option>
+                </select></label
+              >
+            </div>
+            <div class="viewer-tools checks">
+              <label><input id="atom-labels" type="checkbox" />原子编号</label
+              ><label
+                ><input id="compare-input" type="checkbox" />叠加起始结构</label
+              ><button id="reset-view" type="button">视图复位</button
+              ><button id="clear-fixed" type="button">清除原子选择</button>
+            </div>
+            <div id="viewer" aria-label="候选分子三维预览"></div>
+            <p id="viewer-note" class="hint" aria-live="polite"></p>
+            <div id="trajectory-controls" hidden>
+              <label for="trajectory-frame"
+                >生成过程（不是分子动力学轨迹）</label
+              ><input
+                id="trajectory-frame"
+                type="range"
+                min="0"
+                max="1"
+                value="0"
+              /><span id="trajectory-label"></span
+              ><button id="trajectory-play" type="button">播放生成过程</button
+              ><button id="trajectory-exit" type="button">返回最终分子</button>
+            </div>
+            <div id="molecule-detail"></div>
+            <div class="viewer-tools">
+              <label
+                >排序<select id="sort">
+                  <option value="original">生成顺序</option>
+                  <option value="qed">类药性高到低</option>
+                  <option value="sa">合成难度低到高</option>
+                  <option value="clashes">近距离接触少到多</option>
+                </select></label
+              ><label
+                >显示<select id="filter">
+                  <option value="all">全部有效结构</option>
+                  <option value="connected">仅连通分子</option>
+                  <option value="no-clashes">无近距离接触</option>
+                </select></label
+              >
+            </div>
+            <div id="molecules" class="molecule-grid"></div>
+          </section>
+          <section id="editing-panel" class="panel" hidden>
+            <div class="panel-heading">
+              <h2>结构编辑与设计反馈</h2>
+              <span id="selected-label" class="badge"></span>
+            </div>
+            <p class="hint">
+              Ketcher · 修改原子、化学键、环与立体化学。RDKit
+              校验并生成对齐的三维起点，原结果始终保留。
+            </p>
+            <iframe
+              id="editor"
+              src="about:blank"
+              title="Ketcher 分子编辑器"
+            ></iframe
+            ><label for="feedback">设计反馈 / 修改理由</label
+            ><textarea
+              id="feedback"
+              rows="2"
+              maxlength="3000"
+              placeholder="记录取代基、骨架和性质方面的设计考虑…"
+            ></textarea
+            ><label for="rating">人工评价</label
+            ><select id="rating">
+              <option value="0">未评分</option>
+              <option value="1">1 · 不保留</option>
+              <option value="2">2 · 需较大修改</option>
+              <option value="3">3 · 待评估</option>
+              <option value="4">4 · 值得继续</option>
+              <option value="5">5 · 优先研究</option>
+            </select>
+            <label for="continue-task">下一轮想做什么？</label
+            ><select id="continue-task"></select>
+            <div class="actions">
+              <button id="save-edit">保存编辑与反馈</button
+              ><button id="use-original">用原分子继续设计</button
+              ><button id="optimize" class="primary">
+                保存编辑版并设置下一轮
+              </button>
+            </div>
+            <p id="selection-sync" class="hint" role="status">
+              二维和三维使用同一份原子结构；修改后保存以更新三维构象。
+            </p>
+            <p id="edit-message" aria-live="polite"></p>
+            <div id="edit-history"></div>
+          </section>
+        </div>
       </section>
       <section id="library-view" class="app-view" hidden>
         <div class="page-heading">
@@ -666,6 +662,21 @@
       <p>使用真实结构坐标绘图。视角、颜色与透明度只影响呈现，不改变分子。</p>
       <div class="field-grid">
         <label
+          >蛋白范围<select id="figure-proteinScope">
+            <option value="full">完整蛋白</option>
+            <option value="pocket">仅已定义的口袋</option>
+            <option value="none">隐藏蛋白</option>
+          </select></label
+        >
+        <label
+          >配体显示<select id="figure-ligandRepresentation">
+            <option value="stick">球棍</option>
+            <option value="sticks">棍状</option>
+            <option value="sphere">空间填充</option>
+            <option value="line">线框</option>
+          </select></label
+        >
+        <label
           >蛋白主链<select id="figure-representation">
             <option value="cartoon">二级结构卡通</option>
             <option value="stick">棍状</option>
@@ -712,10 +723,30 @@
           </select></label
         ><label>背景颜色<input id="figure-background" type="color" /></label>
       </div>
+      <div class="field-grid">
+        <label
+          >显示邻近残基（Å）<input
+            id="figure-contextRadius"
+            type="number"
+            min="3"
+            max="8"
+            step="any" /></label
+        ><label
+          >邻近残基样式<select id="figure-sidechainStyle">
+            <option value="line">细线框</option>
+            <option value="stick">细棍状</option>
+          </select></label
+        >
+      </div>
+      <div class="viewer-tools checks">
+        <label><input id="figure-fog" type="checkbox" />远处淡化</label
+        ><label
+          ><input id="figure-showSurface" type="checkbox" />显示口袋表面</label
+        >
+      </div>
       <div class="viewer-tools checks">
         <label
-          ><input id="figure-sidechains" type="checkbox" />显示 4 Å
-          邻近残基侧链</label
+          ><input id="figure-sidechains" type="checkbox" />显示邻近残基</label
         ><label
           ><input id="figure-labels" type="checkbox" />标注近邻残基（最多 10
           个）</label

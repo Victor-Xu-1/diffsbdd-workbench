@@ -270,6 +270,7 @@ def inspect_pose(payload: PoseInput):
                 "molblock": Chem.MolToMolBlock(molecule),
                 "atoms": molecule.GetNumAtoms(),
                 "fragments": len(Chem.GetMolFrags(molecule)),
+                "rings": [list(ring) for ring in molecule.GetRingInfo().AtomRings()],
             }
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(422, public_message(exc)) from exc

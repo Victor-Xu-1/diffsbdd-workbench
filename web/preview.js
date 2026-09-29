@@ -8,7 +8,18 @@ import {
   residueContext,
 } from "./molecular-style.js";
 import { registerFigure } from "./figure-panel.js";
-import { loadEditor } from "./editor-bridge.js";
+import {
+  loadEditor,
+  setupEditorSelection,
+  highlightEditorAtoms,
+} from "./editor-bridge.js";
+import { api } from "./api.js";
+import {
+  selectionGroup,
+  toggleGroup,
+  enableMolecularHover,
+  clearHover,
+} from "./molecular-selection.js";
 import { $, parseAtomNumbers, setAtomSelection } from "./controls.js";
 let figureSettings,
   surfaceTask = Promise.resolve();
@@ -20,6 +31,7 @@ let viewer,
   pocket = "",
   protein = "",
   initial = "",
+  rings = [],
   selected = new Set(),
   measurement = [],
   animation = null,
@@ -44,13 +56,16 @@ function atomName(atom) {
 function clicked(atom) {
   const mode = $("click-mode").value;
   if (mode === "select" && atom.model === 1) {
-    selected.has(atom.index)
-      ? selected.delete(atom.index)
-      : selected.add(atom.index);
+    selected = new Set(
+      toggleGroup(
+        [...selected],
+        selectionGroup(atom.index, rings, $("result-pick").value),
+      ),
+    );
     setAtomSelection([...selected]);
     style();
     $("viewer-note").textContent =
-      `已保留 ${selected.size} 个原子；橙色标记。编号也可在左侧输入。`;
+      `已选择 ${selected.size} 个原子；橙色标记。可用于下一轮保留片段设计。`;
   } else if (mode === "measure") {
     measurement.push(atom);
     if (measurement.length > 2) measurement = [atom];
@@ -81,15 +96,16 @@ function clicked(atom) {
 function style() {
   if (!viewer) return;
   clearFigureLabels(viewer);
+  clearHover(viewer);
   viewer.removeAllShapes();
   applyCamera(viewer, figureSettings);
   viewer.setStyle(
     { model: 0 },
-    $("protein-view").value === "none" ? {} : proteinStyle(figureSettings),
+    figureSettings.proteinScope === "none" ? {} : proteinStyle(figureSettings),
   );
-  const kind = $("ligand-view").value;
+  const kind = figureSettings.ligandRepresentation;
   viewer.setStyle({ model: 1 }, ligandStyle(kind, figureSettings));
-  if ($("protein-view").value !== "none")
+  if (figureSettings.proteinScope !== "none")
     residueContext(
       viewer,
       figureSettings,
@@ -117,12 +133,17 @@ function style() {
         fontColor: "#3f5363",
       });
   viewer.setClickable({ model: 1 }, true, clicked);
-  viewer.setClickable({ model: 0 }, true, clicked);
-  const nextSurfaceKey = `${sceneVersion}:${$("surface").checked}:${$("protein-view").value}:${figureSettings.surfaceType}:${figureSettings.surfaceOpacity}:${figureSettings.proteinColor}`;
+  viewer.setClickable(
+    { model: 0 },
+    $("click-mode").value !== "select",
+    clicked,
+  );
+  enableMolecularHover(viewer);
+  const nextSurfaceKey = `${sceneVersion}:${figureSettings.showSurface}:${figureSettings.proteinScope}:${figureSettings.surfaceType}:${figureSettings.surfaceOpacity}:${figureSettings.proteinColor}`;
   if (surfaceKey !== nextSurfaceKey) {
     surfaceKey = nextSurfaceKey;
     viewer.removeAllSurfaces();
-    if ($("surface").checked && $("protein-view").value !== "none") {
+    if (figureSettings.showSurface && figureSettings.proteinScope !== "none") {
       $("viewer-note").textContent = "正在绘制口袋表面…";
       surfaceTask = viewer
         .addSurface(
@@ -148,7 +169,7 @@ function style() {
         .catch(() => {
           if (surfaceKey === nextSurfaceKey)
             $("viewer-note").textContent =
-              "表面生成失败，请关闭表面显示并重新勾选。";
+              "表面生成失败，请重新选择口袋表面方案。";
         });
     }
   }
@@ -165,16 +186,16 @@ function scene() {
       antialias: true,
     });
   viewer.removeAllModels();
-  viewer.addModel($("protein-view").value === "full" ? protein : pocket, "pdb");
+  viewer.addModel(
+    figureSettings.proteinScope === "pocket" ? pocket : protein,
+    "pdb",
+  );
   viewer.addModel(ligand || "", "mol");
   comparisonModel = initial ? viewer.addModel(initial, "sdf") : null;
   style();
-  resetCamera(viewer, 1, 0.8);
+  resetCamera(viewer, 1, 1.05);
 }
-export async function showMolecule(job, index) {
-  stopAnimation();
-  const current = ++revision;
-  const mol = await read(`/api/jobs/${job.id}/molecules/${index}.mol`);
+async function contextFor(job) {
   if (!cache.has(job.id)) {
     const texts = await Promise.all([
       read(`/api/jobs/${job.id}/files/pocket.pdb`),
@@ -183,13 +204,25 @@ export async function showMolecule(job, index) {
     if (cache.size >= 2) cache.delete(cache.keys().next().value);
     cache.set(job.id, texts);
   }
+  return cache.get(job.id);
+}
+export async function showMolecule(job, index) {
+  stopAnimation();
+  const current = ++revision;
+  const mol = await read(`/api/jobs/${job.id}/molecules/${index}.mol`);
+  const pose = await api("/api/poses/inspect", {
+    method: "POST",
+    body: JSON.stringify({ sdf: mol }),
+  });
+  const context = await contextFor(job);
   const source =
     job.report?.mode === "optimization" || job.report?.mode === "inpaint"
       ? await read(`/api/jobs/${job.id}/files/edited_input.sdf`)
       : "";
   if (current !== revision) return;
-  [pocket, protein] = cache.get(job.id);
-  ligand = mol;
+  [pocket, protein] = context;
+  ligand = pose.molblock;
+  rings = pose.rings;
   initial = source;
   selected.clear();
   measurement = [];
@@ -213,15 +246,31 @@ export async function showMolecule(job, index) {
 }
 export async function showEdited(job, edit) {
   stopAnimation();
+  const current = ++revision;
   const text = await read(`/api/jobs/${job.id}/edits/${edit.id}.sdf`);
-  initial = ligand;
+  const pose = await api("/api/poses/inspect", {
+    method: "POST",
+    body: JSON.stringify({ sdf: text }),
+  });
+  const [context, parent] = await Promise.all([
+    contextFor(job),
+    read(`/api/jobs/${job.id}/molecules/${edit.parent_index}.mol`),
+  ]);
+  if (current !== revision) return false;
+  [pocket, protein] = context;
+  initial = parent;
+  trajectory = null;
+  $("trajectory-controls").hidden = true;
   $("compare-input").disabled = false;
   $("compare-input").checked = true;
-  ligand = text.split("$$$$")[0];
+  ligand = pose.molblock;
+  rings = pose.rings;
   selected.clear();
   $("fixed-atoms").value = "";
   await loadEditor(ligand);
+  if (current !== revision) return false;
   scene();
+  return true;
 }
 function frame() {
   if (!trajectory || !viewer) return;
@@ -246,32 +295,60 @@ function frame() {
     `第 ${i + 1} / ${trajectory.frames.length} 帧 · 中间状态不作为化学有效分子使用`;
 }
 export function setupPreview() {
+  setupEditorSelection({
+    mapped: () => {
+      $("selection-sync").textContent =
+        "二维与三维原子已建立对应，可点选联动。";
+    },
+    selected: (indices) => {
+      if ($("results-view").hidden) return;
+      setAtomSelection(indices);
+      $("selection-sync").textContent =
+        `二维与三维已对应选择 ${indices.length} 个原子。`;
+    },
+    changed: () => {
+      setAtomSelection([]);
+      $("selection-sync").textContent =
+        "二维结构已修改；保存编辑后会更新三维构象和原子对应关系。";
+    },
+    unmapped: () => {
+      $("selection-sync").textContent =
+        "当前二维结构与三维原子无法可靠对应，请先保存编辑版。";
+    },
+  });
   figureSettings = registerFigure("result", {
     viewer: () => viewer,
     element: () => $("viewer"),
     redraw: () => {
-      style();
+      const camera = viewer?.getView();
+      if (viewer) scene();
+      if (camera) viewer.setView(camera);
       return surfaceTask;
     },
     ready: () => surfaceTask,
+    focus: (target) => {
+      resetCamera(
+        viewer,
+        target === "protein" ? 0 : 1,
+        target === "protein" ? 0.95 : 1.05,
+      );
+    },
   });
-  for (const id of ["ligand-view", "surface", "atom-labels", "compare-input"])
+  for (const id of ["atom-labels", "compare-input", "click-mode"])
     $(id).addEventListener("change", style);
-  $("protein-view").addEventListener("change", () => {
-    if (viewer) scene();
-  });
   $("reset-view").addEventListener("click", () => {
     stopAnimation();
     if (viewer) scene();
   });
   $("clear-fixed").addEventListener("click", () => {
-    selected.clear();
-    $("fixed-atoms").value = "";
-    style();
+    setAtomSelection([]);
   });
   $("fixed-atoms").addEventListener("change", () => {
     try {
       selected = new Set(parseAtomNumbers($("fixed-atoms").value));
+      if (!$("results-view").hidden && highlightEditorAtoms([...selected]))
+        $("selection-sync").textContent =
+          `二维与三维已对应选择 ${selected.size} 个原子。`;
       style();
     } catch (e) {
       $("viewer-note").textContent = e.message;

@@ -12,7 +12,8 @@ const browser = await chromium.launch({
     ? { channel: process.env.PLAYWRIGHT_CHANNEL }
     : {}),
 });
-let page;
+let page,
+  releaseDelayedResponse = () => {};
 try {
   const context = await browser.newContext({
     viewport: { width: 1536, height: 1024 },
@@ -268,14 +269,31 @@ try {
   await page.locator("#nav-results").click();
   const jobs = await (await context.request.get(`${base}/api/jobs`)).json();
   if (jobs.length >= 2) {
-    const slow = jobs[0].id,
-      chosen = jobs[1].id;
+    const slow = jobs[1].id,
+      chosen = jobs[0].id;
+    const gate = new Promise((resolve) => {
+      releaseDelayedResponse = resolve;
+    });
+    const handlers = [];
+    const intercepted = page.waitForRequest(
+      (request) => request.url() === `${base}/api/jobs/${slow}`,
+    );
     await page.route(`**/api/jobs/${slow}`, async (route) => {
-      const response = await route.fetch();
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      await route.fulfill({ response });
+      const handling = (async () => {
+        const response = await route.fetch();
+        await gate;
+        await route.fulfill({ response });
+      })();
+      // Return any route failure to the main test instead of leaving a detached rejection.
+      const observed = handling.then(
+        () => null,
+        (error) => error,
+      );
+      handlers.push(observed);
+      await observed;
     });
     await page.locator("#history").selectOption(slow);
+    await intercepted;
     await page.locator("#history").selectOption(chosen);
     await page.waitForFunction(
       (id) =>
@@ -285,6 +303,10 @@ try {
           ?.includes(id),
       chosen,
     );
+    releaseDelayedResponse();
+    const routeFailure = (await Promise.all(handlers)).find(Boolean);
+    if (routeFailure) throw routeFailure;
+    await page.unrouteAll({ behavior: "wait" });
     await page.waitForLoadState("networkidle");
     assert.equal(await page.locator("#history").inputValue(), chosen);
     assert.ok(
@@ -292,8 +314,48 @@ try {
         await page.locator("#downloads a").first().getAttribute("href")
       ).includes(chosen),
     );
-    await page.unrouteAll({ behavior: "wait" });
   }
+  await page.waitForFunction(
+    () => !document.querySelector("#save-edit").disabled,
+  );
+  const editParent = await page.locator("#history").inputValue();
+  await page.route("**/api/poses/inspect", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "预览解析暂时不可用" }),
+    }),
+  );
+  const savedResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/jobs/${editParent}/edits`) &&
+      response.request().method() === "POST",
+  );
+  await page.locator("#save-edit").click();
+  const savedEdit = await (await savedResponse).json();
+  assert.ok(savedEdit.id);
+  await page.waitForFunction(() =>
+    document
+      .querySelector("#edit-message")
+      .textContent.includes("编辑版已保存，但后续预览"),
+  );
+  const persistedJob = await (
+    await context.request.get(`${base}/api/jobs/${editParent}`)
+  ).json();
+  assert.ok(persistedJob.edits.some((edit) => edit.id === savedEdit.id));
+  await page.unrouteAll({ behavior: "wait" });
+  await page
+    .locator(".edit-row")
+    .filter({ has: page.locator(`a[href$="/${savedEdit.id}.sdf"]`) })
+    .getByRole("button")
+    .click();
+  await page.waitForFunction(() =>
+    document.querySelector("#molecule-detail").textContent.includes("编辑版"),
+  );
+  assert.match(await page.locator("#selection-sync").innerText(), /已建立对应/);
+  console.log(
+    "Passed: saved edit survives preview failure and reopens from persisted history",
+  );
   await page.locator("[data-task=generate]").click();
   await page.locator("#load-example").click();
   await page.waitForFunction(
@@ -347,5 +409,7 @@ try {
   }
   throw error;
 } finally {
+  releaseDelayedResponse();
+  if (page) await page.unrouteAll({ behavior: "wait" });
   await browser.close();
 }

@@ -266,6 +266,10 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["atoms"], self.molecule.GetNumAtoms())
         self.assertEqual(
+            json.loads(body)["rings"],
+            [list(ring) for ring in self.molecule.GetRingInfo().AtomRings()],
+        )
+        self.assertEqual(
             self.request("/api/poses/inspect", {"sdf": "invalid structure document"})[
                 0
             ],
