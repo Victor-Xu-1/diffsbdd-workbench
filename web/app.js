@@ -396,7 +396,8 @@ try {
       state.source = null;
       restoreOptions(request.options);
       setView("design");
-      await restorePocketInputs(request);
+      if (!(await restorePocketInputs(request)))
+        throw new Error("未能恢复设计口袋，请检查服务后重新打开该设计。");
       restoreOptions(request.options);
       $("fixed-atoms").dispatchEvent(new Event("change"));
       $("task").dispatchEvent(new Event("change"));

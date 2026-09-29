@@ -121,6 +121,21 @@ try {
   await page.locator("#save-design-dialog").waitFor({ state: "hidden" });
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("[data-view=designs].nav-item").click();
+  await page.route("**/api/pockets/inspect", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "口袋读取暂不可用" }),
+    }),
+  );
+  await page.locator(`[data-design="${record.id}"]`).click();
+  await page.locator("#error").waitFor({ state: "visible" });
+  assert.ok(
+    !(await page.locator("#notice").textContent()).includes("均已恢复"),
+  );
+  assert.equal(await page.locator("#save-draft").isDisabled(), true);
+  await page.unrouteAll({ behavior: "wait" });
+  await page.locator("[data-view=designs].nav-item").click();
   await page.locator(`[data-design="${record.id}"]`).click();
   await page.waitForFunction(() =>
     document.querySelector("#notice").textContent.includes("均已恢复"),
