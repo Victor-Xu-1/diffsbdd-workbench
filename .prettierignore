@@ -1,0 +1,6 @@
+# Keep publisher bytes unchanged; tools/vendor_assets.py verifies these hashes.
+web/vendor/
+node_modules/
+runs/
+verification/
+test-results/

@@ -11,3 +11,5 @@ Keep model behavior and scientific claims traceable to the pinned upstream imple
 The product version is defined only in `local_diffsbdd/__init__.py`. The API is currently local and version 0.1; changes to saved jobs should preserve old results without modifying or discarding user records. Frontend dependencies are managed by npm and `package-lock.json`; Python dependencies are managed by uv and `requirements.lock`. CPU-test dependency locks are generated outside the repository from the same production constraints.
 
 All new workbench contributions are submitted under the repository's MIT license. Do not add materials you do not have permission to redistribute.
+
+Bundled third-party distributions are immutable upstream assets: do not reformat them. Prettier checks workbench sources; the separate mandatory vendor verifier checks every distributed asset by SHA-256.

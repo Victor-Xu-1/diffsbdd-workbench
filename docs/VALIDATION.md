@@ -37,3 +37,8 @@ Test artifacts, logs, GPU output and feedback stay in ignored local directories.
 - Ketcher is the unmodified official standalone editor. Its native chemistry tooltips use English; surrounding workflows, settings and feedback use medicinal-chemistry Chinese.
 - Full research training, dataset curation and paper benchmark runs were not executed: their datasets and training resources are outside this 8 GB inference deployment. The corresponding sidebar entries explain this scope rather than reporting simulated jobs or scores.
 - Figure styles are configurable scientific conventions, not journal certification. Label overlap and the final physical publication size should be reviewed for each selected camera and structure.
+
+## Clean checkout and installation
+
+A separate Git clone under a temporary Linux directory was installed into a new CPU virtual environment using the production dependency constraints: 34 tests passed and all 53 vendor hashes matched. Re-running the documented full installer verified all eight weight files, 91 installed packages, the pinned upstream patch, real CUDA/scatter and chemistry kernels. The Windows background-service installer also completed and its HTTP readiness check passed.
+
