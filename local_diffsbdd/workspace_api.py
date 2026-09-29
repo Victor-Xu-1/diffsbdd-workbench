@@ -12,8 +12,27 @@ from .collections import MoleculeSelection, export_molecules, compare_jobs
 from .registry import model_spec
 from .config import RUNTIME
 from .messages import public_message
+from .interactions import InteractionInput, inspect_interactions
 
 router = APIRouter(prefix="/api")
+
+
+@router.post("/interactions/inspect")
+def interactions(payload: InteractionInput):
+    try:
+        return inspect_interactions(payload)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(422, public_message(exc)) from exc
+
+
+@router.post("/components/{identifier}/download")
+def component_definition(identifier: str):
+    from .components import download_definition
+
+    try:
+        return download_definition(identifier)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(422, public_message(exc)) from exc
 
 
 @router.get("/capabilities")

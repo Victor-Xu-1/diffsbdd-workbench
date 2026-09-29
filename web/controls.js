@@ -107,7 +107,6 @@ export function syncControls() {
   $("initial-input").hidden = task === "generate" || source === "result";
   $("inpaint-fields").hidden = task !== "inpaint";
   $("fragment-toolbar").hidden = task !== "inpaint";
-  document.body.classList.toggle("fragment-design", task === "inpaint");
   $("optimization-fields").hidden = task !== "optimize" && task !== "diversify";
   $("sampling-fields").hidden = task === "optimize";
 }

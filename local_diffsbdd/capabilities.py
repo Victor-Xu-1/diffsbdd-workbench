@@ -58,8 +58,8 @@ FIELDS = [
     ("center", "新原子的初始探索区域", "inpaint-controls", ["inpaint"], {}),
     (
         "trajectory",
-        "保存生成过程（单个候选，可播放）",
-        "inpaint-controls",
+        "保存扩散中间态（单个候选，诊断用）",
+        "advanced-fields",
         ["inpaint"],
         {},
     ),

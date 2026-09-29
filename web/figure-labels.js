@@ -15,6 +15,14 @@ export function scaleFigureLabels(viewer, scale) {
     viewer.setLabelStyle(label, {
       ...style,
       fontSize: Math.round((style.fontSize || 14) * scale),
+      ...(style.screenOffset
+        ? {
+            screenOffset: {
+              x: style.screenOffset.x * scale,
+              y: style.screenOffset.y * scale,
+            },
+          }
+        : {}),
     });
     // 3Dmol labels are texture sprites: increase texture resolution while
     // preserving their geometric footprint. Confined to this renderer adapter.

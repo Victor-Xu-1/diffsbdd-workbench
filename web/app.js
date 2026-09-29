@@ -1,4 +1,5 @@
 import { configureContract, getContract } from "./contract.js";
+import { setupExperience } from "./experience.js";
 import { setupHelp } from "./help.js";
 import { setupDesigns, refreshDesigns } from "./designs-ui.js";
 import { setupPreparation } from "./preparation-ui.js";
@@ -147,14 +148,15 @@ function schedule() {
     }
   }, 2000);
 }
-async function selectJob(id) {
+async function selectJob(id, navigate = true) {
   if (!id || state.saving) return;
   const token = ++state.jobRevision;
   state.pendingJob = id;
   ++state.loadRevision;
   state.loadingSource = true;
   buttonState();
-  setView("results");
+  if (navigate && !["results", "editor"].includes(document.body.dataset.view))
+    setView("results");
   clearTimeout(state.timer);
   error();
   state.selected = -1;
@@ -398,6 +400,7 @@ try {
   configureContract(capabilities);
   setupFigures();
   mountControls();
+  setupExperience();
   setupPreview();
   setupPocketUI({
     getSource: () => state.source,
@@ -420,7 +423,7 @@ try {
         const jobs = await api("/api/jobs");
         const latest = jobs.find((job) => job.report?.valid > 0) || jobs[0];
         if (latest && requested === state.jobRevision)
-          await selectJob(latest.id);
+          await selectJob(latest.id, false);
       }
     },
   });
@@ -487,6 +490,7 @@ try {
   await refreshDesigns();
   clearInputs();
   buttonState();
+  $("load-example").disabled = false;
   schedule();
 } catch (e) {
   state.ready = false;

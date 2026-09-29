@@ -42,6 +42,18 @@ def main():
                 "attempted": 1,
                 "molecules": [values],
                 "pocket_residues": residues,
+                "settings": {"trajectory": True},
+            },
+        )
+        count = Chem.SDMolSupplier(str(fixture))[0].GetNumAtoms()
+        write_report(
+            result / "trajectory.json",
+            {
+                "fixture": "Synthetic invalid diffusion states for preview-isolation regression; not molecular poses.",
+                "frames": [
+                    {"elements": ["C"] * count, "coordinates": [[0, 0, 0]] * count}
+                    for _ in range(3)
+                ],
             },
         )
         write_report(

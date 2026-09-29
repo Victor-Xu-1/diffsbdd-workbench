@@ -13,6 +13,8 @@ from rdkit import Chem
 from .config import PACKAGE
 from .inputs import validate_pocket
 from .sampling import read_pose
+from .preparation import PreparationInput, prepare_structure
+from .components import ligand_from_residue
 
 
 @dataclass
@@ -87,6 +89,13 @@ def prepare_input(request, manager=None):
                 ligand = directory / "reference.sdf"
                 ligand.write_text(request.reference_sdf, encoding="utf-8")
                 reference = str(ligand)
+        normalized = prepare_structure(
+            PreparationInput(
+                protein_text=protein.read_text(), remove_water=False, keep_ligands=True
+            )
+        )
+        protein = directory / "canonical.pdb"
+        protein.write_text(normalized["protein"])
         _, pocket_ids, _ = validate_pocket(protein, reference, residues)
         if request.mode != "result" and request.initial_sdf:
             initial = directory / "initial.sdf"
@@ -110,9 +119,16 @@ def preview_pocket(request, manager):
         protein = PDBParser(QUIET=True).get_structure("protein", str(prepared.protein))[
             0
         ]
-        reference, format_name = "", "pdb"
+        reference, format_name = "", "sdf"
+        ligand_status = {"state": "none", "message": "未指定参考配体。"}
         if prepared.reference and prepared.reference.lower().endswith(".sdf"):
-            reference, format_name = Path(prepared.reference).read_text(), "sdf"
+            molecule = read_pose(prepared.reference)
+            reference = Chem.MolToMolBlock(molecule)
+            ligand_status = {
+                "state": "verified",
+                "source": "SDF",
+                "message": "已读取 SDF 的真实键型与三维坐标。",
+            }
         elif prepared.reference:
             chain, number = prepared.reference.split(":")
             ligand = next(
@@ -120,13 +136,22 @@ def preview_pocket(request, manager):
                 for r in protein.get_residues()
                 if r.parent.id == chain and r.id[1] == int(number)
             )
-            writer, ligand_stream = PDBIO(), StringIO()
-            writer.set_structure(ligand)
-            writer.save(ligand_stream)
-            reference = ligand_stream.getvalue()
+            molecule, ligand_status = ligand_from_residue(ligand)
+            reference = Chem.MolToMolBlock(molecule) if molecule is not None else ""
         elif prepared.initial:
             reference, format_name = prepared.initial.read_text(), "sdf"
+            ligand_status = {
+                "state": "verified",
+                "source": "SDF",
+                "message": "已读取起始分子的真实键型与三维坐标。",
+            }
         initial = read_pose(prepared.initial) if prepared.initial else None
+        if initial is not None:
+            ligand_status = {
+                "state": "verified",
+                "source": "SDF",
+                "message": "起始分子已按 SDF 键型和三维坐标校验。",
+            }
         from rdkit.Chem.Scaffolds import MurckoScaffold
 
         scaffold = MurckoScaffold.GetScaffoldForMol(initial) if initial else None
@@ -142,6 +167,7 @@ def preview_pocket(request, manager):
             "pocket": stream.getvalue(),
             "reference": reference,
             "reference_format": format_name,
+            "ligand_status": ligand_status,
             "residues": prepared.residues,
             "residue_count": len(prepared.residues),
             "inventory": [

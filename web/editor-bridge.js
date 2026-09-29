@@ -9,8 +9,48 @@ let activeEditor = null,
   syncing = false,
   callbacks = {};
 const subscribed = new WeakSet();
+let layoutRevision = 0,
+  resizeObserver;
+async function fitViewport() {
+  const frame = document.getElementById("editor");
+  if (!activeEditor || frame.getBoundingClientRect().width < 80) return;
+  const revision = ++layoutRevision;
+  frame.style.pointerEvents = "none";
+  frame.setAttribute("aria-busy", "true");
+  try {
+    // Wait for the iframe's native resize handler, then adjust only its viewport.
+    // Re-importing here would discard undo history and unsaved chemical edits.
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+    if (revision !== layoutRevision || frame.getBoundingClientRect().width < 80)
+      return;
+    const editor = activeEditor.editor;
+    if (!editor.struct().atoms.size) return;
+    // Ketcher caches canvas dimensions and text bounds while its iframe is hidden.
+    // Refresh both before fitting, so the drawing and atom hit-testing agree.
+    editor.render.resizeViewBox();
+    editor.render.update(true);
+    editor.zoom(1);
+    editor.render.resizeViewBox();
+    editor.centerViewportAccordingToStruct();
+    // Leave room for atom labels and Ketcher's fixed side toolbars.
+    editor.zoom(Math.max(0.1, editor.zoom() * 0.82));
+    editor.render.resizeViewBox();
+    editor.centerViewportAccordingToStruct();
+  } finally {
+    if (revision === layoutRevision) {
+      frame.style.pointerEvents = "";
+      frame.setAttribute("aria-busy", "false");
+    }
+  }
+}
 export function setupEditorSelection(handlers) {
   callbacks = handlers;
+  resizeObserver = new ResizeObserver(
+    () => void fitViewport().catch((error) => callbacks.layoutError?.(error)),
+  );
+  resizeObserver.observe(document.getElementById("editor"));
 }
 export function highlightEditorAtoms(indices) {
   if (!atomIds || !activeEditor) return false;
@@ -111,6 +151,7 @@ export async function loadEditor(molblock) {
       await editor.setMolecule(molblock);
       if (current !== sequence) return;
       activeEditor = editor;
+      await fitViewport();
       atomIds = editorAtomMap(molblock, editor.editor.struct());
       if (!atomIds) callbacks.unmapped?.();
       else callbacks.mapped?.();

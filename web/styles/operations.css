@@ -24,10 +24,6 @@
   margin: 12px 0;
 }
 
-#prepare-open {
-  margin-top: 10px;
-  font-size: 12px;
-}
 .confirmation.pending .confirm-icon,
 .action-bar:not(.is-ready) .footer-status > img {
   display: none;
@@ -65,13 +61,6 @@
   padding: 4px 7px;
   min-height: 29px;
   width: auto;
-}
-.fragment-design #pocket-viewer {
-  height: 300px;
-}
-.fragment-design .input-panel {
-  height: auto;
-  min-height: 438px;
 }
 .library-card {
   border: 1px solid var(--border);
@@ -155,13 +144,5 @@
   }
   .local-status {
     display: none;
-  }
-}
-@media (max-width: 600px) {
-  .fragment-design .pocket-preview-panel {
-    height: auto;
-  }
-  .fragment-design #pocket-viewer {
-    height: 300px;
   }
 }

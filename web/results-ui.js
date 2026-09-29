@@ -206,6 +206,13 @@ export function renderStatus(job, error) {
     caption,
     link("技术日志", `/api/jobs/${job.id}/files/process.log`),
   );
+  if (report.settings?.trajectory && job.status === "completed")
+    support.append(
+      link(
+        "扩散中间态 JSON（非完整分子，仅用于诊断）",
+        `/api/jobs/${job.id}/files/trajectory.json`,
+      ),
+    );
   $("diagnostics").append(support);
   if (["failed", "interrupted"].includes(job.status))
     error(

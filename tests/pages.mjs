@@ -23,7 +23,23 @@ try {
   page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(base, { waitUntil: "networkidle" });
+  let releaseStartup;
+  const startupGate = new Promise((resolve) => {
+    releaseStartup = resolve;
+  });
+  await page.route("**/api/capabilities", async (route) => {
+    await startupGate;
+    await route.continue();
+  });
+  await page.goto(base, { waitUntil: "domcontentloaded" });
+  assert.equal(
+    await page.locator("#load-example").isDisabled(),
+    true,
+    "Input actions must wait for initialization, otherwise the late reset loses the loaded structure",
+  );
+  releaseStartup();
+  await page.locator("#load-example:enabled").waitFor();
+  await page.unroute("**/api/capabilities");
   assert.equal(await page.locator("#generate").isDisabled(), true);
   assert.equal(await page.locator("#protein-read").isVisible(), false);
   assert.equal(
@@ -76,8 +92,7 @@ try {
     await page.locator("#model option").count(),
     contract.models.length,
   );
-  if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
-    await page.locator("#advanced-settings > summary").click();
+  await page.locator("#experience-mode").selectOption("expert");
   await page.locator("[data-preset=quick]").click();
   await page.locator("#atoms").fill("9999");
   await page.locator("[data-task=optimize]").click();
@@ -99,8 +114,7 @@ try {
     ).attempts,
   );
   await page.locator("[data-task=generate]").click();
-  if (await page.locator("#advanced-settings").evaluate((el) => el.open))
-    await page.locator("#advanced-settings > summary").click();
+  await page.locator("#experience-mode").selectOption("simple");
   await page.locator("label[for=count] .field-help button").hover();
   await page.locator("#help-count").waitFor({ state: "visible" });
   assert.match(await page.locator("#help-count").innerText(), /最终有效数量/);
@@ -234,8 +248,7 @@ try {
       chosen = Boolean(await page.locator("#fixed-atoms").inputValue());
     }
   assert.ok(chosen, "Could not select an actual starting ligand atom/ring");
-  if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
-    await page.locator("#advanced-settings > summary").click();
+  await page.locator("#experience-mode").selectOption("expert");
   await page.locator("#fixed-atoms").fill("invalid");
   await page.locator("#fragment-pick").focus();
   assert.equal(
@@ -315,6 +328,7 @@ try {
       ).includes(chosen),
     );
   }
+  await page.locator("#nav-editor").click();
   await page.waitForFunction(
     () => !document.querySelector("#save-edit").disabled,
   );

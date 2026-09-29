@@ -105,7 +105,7 @@ progress {
   font-size: 12px;
 }
 #viewer {
-  height: 420px;
+  height: clamp(480px, 62vh, 720px);
   position: relative;
   background: #f5f9ff;
   overflow: hidden;
@@ -169,11 +169,7 @@ progress {
   font-size: 13px;
   color: #137c64;
 }
-#trajectory-controls {
-  padding: 12px;
-  background: #f0f6ff;
-  border-radius: 8px;
-}
+
 dialog {
   border: 1px solid #cfdced;
   border-radius: 12px;
@@ -249,21 +245,28 @@ dialog p {
 .results-workspace > .panel {
   min-width: 0;
 }
-@media (min-width: 1400px) {
-  .results-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .results-workspace .viewer-tools label {
-    min-width: 160px;
-    flex: 1;
-  }
-  .results-workspace #editor {
-    height: 480px;
-  }
-  .results-workspace .properties {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .results-workspace .molecule-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.interaction-panel:not(:empty) {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.interaction-panel summary {
+  cursor: pointer;
+  color: #52647b;
+}
+.interaction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+}
+.interaction-row button {
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.interaction-panel details > button {
+  margin-top: 8px;
 }
