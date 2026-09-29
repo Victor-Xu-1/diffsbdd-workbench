@@ -37,6 +37,7 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
   await page.goto(base, { waitUntil: "networkidle" });
+  await page.locator("#load-example").click();
   await page.waitForFunction(
     () => document.querySelector("#model").options.length === 8,
   );
@@ -107,7 +108,8 @@ try {
   if (!uiOnly) {
     await page.locator("#count").fill("2");
     await page.locator("#size_mode").selectOption("fixed");
-    await page.locator("#expert-mode").click();
+    if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+      await page.locator("#advanced-settings > summary").click();
     await page.locator("#atoms").fill("24");
     const sent = page.waitForResponse(
       (r) => r.url() === `${base}/api/jobs` && r.request().method() === "POST",
@@ -221,7 +223,8 @@ try {
           "口袋已确认",
     );
     await page.locator('[data-task="inpaint"]').click();
-    await page.locator("#expert-mode").click();
+    if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+      await page.locator("#advanced-settings > summary").click();
     await page.locator("#size_mode").selectOption("fixed");
     const data = await (
       await context.request.get(`${base}/api/jobs/${parent}`)
@@ -291,7 +294,8 @@ try {
   );
   await page.setViewportSize({ width: 1536, height: 1024 });
   await page.locator("#load-example").click();
-  await page.locator("#guided-mode").click();
+  if (await page.locator("#advanced-settings").evaluate((el) => el.open))
+    await page.locator("#advanced-settings > summary").click();
   await page.waitForFunction(
     () =>
       document.querySelector("#pocket-viewer").dataset.ready === "true" &&

@@ -53,23 +53,10 @@ async function process(reset = false) {
 }
 export function setupPreparation(handlers) {
   callbacks = handlers;
-  $("prepare-file").addEventListener(
-    "change",
-    run(async () => {
-      const file = $("prepare-file").files[0];
-      if (!file || file.size > 5000000)
-        throw new Error("请选择不超过 5 MB 的 PDB 文件。");
-      stale();
-      const token = revision;
-      const text = await file.text();
-      if (token !== revision) return;
-      protein = text;
-      await process(true);
-    }, callbacks.onError),
-  );
-  $("prepare-current").addEventListener(
+  $("prepare-open").addEventListener(
     "click",
     run(async () => {
+      $("prepare-dialog").showModal();
       stale();
       const token = revision;
       const current = await callbacks.readInputs();
@@ -95,6 +82,7 @@ export function setupPreparation(handlers) {
     run(async () => {
       if (result)
         await callbacks.useProtein(result.protein, "处理后的蛋白.pdb");
+      $("prepare-dialog").close();
     }, callbacks.onError),
   );
 }

@@ -28,18 +28,15 @@
           alt=""
           class="brand-icon"
         /><strong>DiffSBDD</strong><span>药物设计工作台</span></a
-      ><label class="sr-only" for="project">保存的设计</label
-      ><select id="project">
-        <option value="example">当前设计</option>
-      </select>
+      ><span id="current-design" class="current-design">未保存的设计</span>
       <div class="header-actions">
-        <button id="load-example" class="text-button">
+        <button id="load-example" class="text-button" aria-label="载入官方示例">
           <img
             class="icon"
             src="/assets/vendor/tabler/folder-open.svg"
             alt=""
           />载入官方示例</button
-        ><button id="help-button" class="text-button">
+        ><button id="help-button" class="text-button" aria-label="帮助">
           <img
             class="icon"
             src="/assets/vendor/tabler/help-circle.svg"
@@ -51,34 +48,7 @@
     <aside class="sidebar">
       <p class="nav-label">设计</p>
       <nav aria-label="设计与结果">
-        <button class="nav-item active" data-task="generate">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/flask.svg"
-            alt=""
-          />从头生成
-        </button>
-        <button class="nav-item" data-task="inpaint">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/atom.svg"
-            alt=""
-          />局部结构设计
-        </button>
-        <button class="nav-item" data-task="diversify">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/schema.svg"
-            alt=""
-          />分子多样化
-        </button>
-        <button class="nav-item" data-task="optimize">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/chart-bar.svg"
-            alt=""
-          />性质优化
-        </button>
+        <div id="design-navigation"></div>
         <button class="nav-item" data-view="designs">
           <img
             class="icon"
@@ -101,39 +71,14 @@
             alt=""
           />候选分子库
         </button>
-        <hr />
-        <p class="nav-label">高级工具</p>
-        <button class="nav-item" data-view="models">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/settings.svg"
-            alt=""
-          />模型管理</button
-        ><button class="nav-item" data-view="compare">
+        <button class="nav-item" data-view="compare">
           <img
             class="icon"
             src="/assets/vendor/tabler/list-details.svg"
             alt=""
-          />任务比较</button
-        ><button class="nav-item" data-view="prepare">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/database.svg"
-            alt=""
-          />数据准备
+          />任务比较
         </button>
       </nav>
-      <button id="settings-help" class="nav-item sidebar-bottom">
-        <img
-          class="icon"
-          src="/assets/vendor/tabler/settings.svg"
-          alt=""
-        />使用帮助<img
-          class="tiny-icon"
-          src="/assets/vendor/tabler/chevron-right.svg"
-          alt=""
-        />
-      </button>
     </aside>
     <main class="main-content">
       <div id="error" role="alert" hidden></div>
@@ -141,66 +86,18 @@
       <section id="design-view" class="app-view">
         <div class="page-heading">
           <div>
-            <p class="breadcrumb" id="breadcrumb">01 / 引导模式</p>
+            <p class="breadcrumb" id="breadcrumb">分子设计</p>
             <h1 id="page-title">新建设计任务</h1>
             <p id="page-subtitle">选定蛋白口袋，即可开始生成候选分子。</p>
           </div>
-          <div class="segmented mode-switch">
-            <button id="guided-mode" class="selected" type="button">
-              引导模式</button
-            ><button id="expert-mode" type="button">专业模式</button>
-          </div>
         </div>
-        <div class="stepper" aria-label="设计步骤">
-          <button type="button" class="step complete" data-step="1">
-            <span class="step-number"
-              ><img src="/assets/vendor/tabler/check.svg" alt="已完成" /></span
-            ><span
-              ><strong>1 准备结构</strong><small>上传蛋白并读取</small></span
-            ></button
-          ><span class="step-line done"></span
-          ><button type="button" class="step active" data-step="2">
-            <span class="step-number">2</span
-            ><span
-              ><strong>确认口袋</strong><small>定义结合口袋</small></span
-            ></button
-          ><span class="step-line"></span
-          ><button type="button" class="step" data-step="3">
-            <span class="step-number">3</span
-            ><span
-              ><strong>设置生成</strong><small>选择模型与参数</small></span
-            ></button
-          ><span class="step-line"></span
-          ><button type="button" class="step" data-step="4">
-            <span class="step-number">4</span
-            ><span
-              ><strong>评估结果</strong><small>分析生成的候选分子</small></span
-            >
-          </button>
-        </div>
+
         <form id="generate-form">
-          <select id="task" hidden aria-label="设计类型">
-            <option value="generate">从头生成</option>
-            <option value="inpaint">局部结构设计</option>
-            <option value="diversify">分子多样化</option>
-            <option value="optimize">性质优化</option>
-          </select>
+          <select id="task" hidden aria-label="设计类型"></select>
           <div class="design-top">
             <section class="panel input-panel">
               <div class="panel-heading">
                 <h2>输入与口袋</h2>
-                <button
-                  class="icon-button"
-                  type="button"
-                  id="collapse-input"
-                  aria-label="折叠输入"
-                >
-                  <img
-                    class="tiny-icon"
-                    src="/assets/vendor/tabler/chevron-up.svg"
-                    alt=""
-                  />
-                </button>
               </div>
               <div id="input-body">
                 <label for="protein">蛋白文件</label>
@@ -210,8 +107,8 @@
                       class="icon"
                       src="/assets/vendor/tabler/file-description.svg"
                       alt=""
-                    /><span id="protein-name">3rfm.pdb</span
-                    ><span id="protein-read" class="read-state"
+                    /><span id="protein-name">尚未选择蛋白</span
+                    ><span id="protein-read" class="read-state" hidden
                       ><img
                         class="small-icon"
                         src="/assets/vendor/tabler/circle-check.svg"
@@ -232,7 +129,7 @@
                   hidden
                 >
                   <option value="demo">示例口袋</option>
-                  <option value="custom">上传结构</option>
+                  <option value="custom" selected>上传结构</option>
                   <option value="result">历史结果</option>
                 </select>
                 <label>口袋定义</label>
@@ -268,7 +165,7 @@
                         class="icon"
                         src="/assets/vendor/tabler/file-description.svg"
                         alt=""
-                      /><span id="reference-name">PDB 内参考配体 · A:330</span
+                      /><span id="reference-name">尚未选择参考配体</span
                       ><button
                         id="clear-reference"
                         class="icon-button"
@@ -297,33 +194,31 @@
                   <label for="detected-ligand">选择蛋白文件中的参考配体</label
                   ><select id="detected-ligand"></select>
                 </div>
-                <div id="custom-input" hidden>
-                  <select id="pocket-type" aria-label="口袋定义方式">
-                    <option value="reference">PDB 内配体编号</option>
-                    <option value="sdf">参考配体 SDF</option>
-                    <option value="residues">口袋残基</option></select
-                  ><label id="reference-label" for="reference"
-                    >配体编号，如 A:330</label
-                  ><input id="reference" value="A:330" />
-                  <div id="sdf-input" hidden></div>
-                  <button id="confirm-pocket" type="button" class="subtle">
-                    读取并确认口袋
-                  </button>
+                <div hidden>
+                  <select id="pocket-type">
+                    <option value="reference">参考配体</option>
+                    <option value="sdf">SDF</option>
+                    <option value="residues">残基</option></select
+                  ><input id="reference" />
                 </div>
-                <div id="pocket-confirmed" class="confirmation">
+                <button id="prepare-open" type="button" disabled>
+                  整理当前蛋白：选链 / 去水
+                </button>
+                <div id="pocket-confirmed" class="confirmation pending">
                   <img
                     src="/assets/vendor/tabler/circle-check.svg"
                     alt=""
                     class="confirm-icon"
                   />
                   <div>
-                    <strong id="pocket-confirm-title">正在读取口袋</strong
+                    <strong id="pocket-confirm-title">请先选择蛋白</strong
                     ><small id="pocket-confirm-detail"
-                      >正在解析蛋白与参考配体…</small
+                      >上传 PDB，或点击右上角载入官方示例。</small
                     >
                   </div>
                   <button
                     id="show-residues"
+                    disabled
                     class="text-button blue"
                     type="button"
                   >
@@ -404,7 +299,14 @@
                 ><button type="button" id="clear-fragment">清空</button
                 ><span id="fragment-count">未选择</span>
               </div>
-              <div id="pocket-viewer" aria-label="结合口袋三维预览"></div>
+              <div id="pocket-empty" class="empty-pocket">
+                载入结构后在这里预览，并直接点击选择口袋或片段。
+              </div>
+              <div
+                id="pocket-viewer"
+                aria-label="结合口袋三维预览"
+                hidden
+              ></div>
               <div class="viewer-legend">
                 <span><i class="legend-dot protein-dot"></i>蛋白</span
                 ><span><i class="legend-dot ligand-dot"></i>参考配体</span
@@ -417,87 +319,36 @@
           </div>
           <section class="panel generation-panel" id="generation-panel">
             <div class="panel-heading">
-              <h2 id="generation-heading">生成设置</h2>
-              <div id="design-presets" class="segmented">
-                <button type="button" data-preset="quick">快速试跑</button
-                ><button type="button" data-preset="standard">常规设计</button
-                ><button type="button" data-preset="explore">更多探索</button>
-              </div>
-              <button
-                id="collapse-settings"
-                class="icon-button"
-                type="button"
-                aria-label="折叠生成设置"
-              >
-                <img
-                  class="tiny-icon"
-                  src="/assets/vendor/tabler/chevron-up.svg"
-                  alt=""
-                />
-              </button>
+              <h2 id="generation-heading">设计设置</h2>
+              <div id="design-presets" class="segmented compact"></div>
             </div>
             <div id="settings-body">
               <div id="sampling-fields" class="generation-grid"></div>
-              <div class="model-grid expert-only">
-                <label
-                  >训练数据<select id="model-dataset">
-                    <option value="crossdocked">CrossDocked</option>
-                    <option value="moad">Binding MOAD</option>
-                  </select></label
-                ><label
-                  >模型类型<select id="model-strategy">
-                    <option value="cond">条件模型</option>
-                    <option value="joint">联合模型</option>
-                  </select></label
-                ><label
-                  >口袋表示<select id="model-representation">
-                    <option value="fullatom">全原子</option>
-                    <option value="ca">Cα</option>
-                  </select></label
-                ><button id="inspect-models" type="button">
-                  <img
-                    class="small-icon"
-                    src="/assets/vendor/tabler/folder-open.svg"
-                    alt=""
-                  />更换权重
-                </button>
+              <div class="model-controls">
+                <label for="model">使用模型</label
+                ><select id="model"></select>
               </div>
-              <select id="model" hidden aria-label="完整模型标识"></select>
-              <p class="hint model-hint">
-                支持 CrossDocked / Binding MOAD · 条件 / 联合 · 全原子 / Cα · 8
-                个官方预训练模型
-              </p>
-              <p id="task-help" class="hint" hidden></p>
+              <p id="preset-summary" class="hint" role="status"></p>
+
               <div id="inpaint-fields" hidden>
                 <p class="hint">
                   在右上方三维预览中点击配体保留原子；默认一次选中整个环。
                 </p>
-                <label class="expert-only" for="fixed-atoms"
-                  >保留原子编号（从 1 开始）</label
-                ><input
-                  id="fixed-atoms"
-                  class="expert-only"
-                  placeholder="在结果三维图点击原子，或输入 1,2,3"
-                />
                 <div id="inpaint-controls" class="field-grid"></div>
               </div>
               <div id="optimization-fields" class="field-grid" hidden></div>
-              <div id="diversification-fields" hidden></div>
+
               <details id="advanced-settings">
                 <summary>
                   <img
                     class="small-icon"
                     src="/assets/vendor/tabler/chevron-down.svg"
                     alt=""
-                  /><strong>高级设置：</strong
-                  ><span
-                    >采样步数、分子大小、碎片处理、结构检查、力场松弛、联合模型重采样</span
-                  >
+                  /><strong>高级参数（可选）</strong>
                 </summary>
                 <div id="advanced-fields" class="field-grid"></div>
                 <p class="hint">
-                  500 步为原模型采样长度；减少步数可能改变结果质量。UFF
-                  自由松弛不考虑蛋白。单分子批量适配 8GB 显存。
+                  只显示当前任务可用的参数。参数含义和建议可通过旁边的问号查看。
                 </p>
               </details>
             </div>
@@ -516,8 +367,8 @@
         <div class="history-bar">
           <label for="history">历史任务</label
           ><select id="history">
-            <option value="">暂无任务</option></select
-          ><button id="reuse" type="button">复用设置</button>
+            <option value="">暂无任务</option>
+          </select>
         </div>
         <section class="panel status-panel">
           <div>
@@ -633,6 +484,8 @@
             <option value="4">4 · 值得继续</option>
             <option value="5">5 · 优先研究</option>
           </select>
+          <label for="continue-task">下一轮想做什么？</label
+          ><select id="continue-task"></select>
           <div class="actions">
             <button id="save-edit">保存编辑与反馈</button
             ><button id="use-original">用原分子继续设计</button
@@ -647,7 +500,7 @@
       <section id="library-view" class="app-view" hidden>
         <div class="page-heading">
           <div>
-            <p class="breadcrumb">03 / 分子库</p>
+            <p class="breadcrumb">结果分析 / 分子库</p>
             <h1>候选分子库</h1>
             <p>来自本机任务的真实生成结果，点击结构返回完整实验记录。</p>
           </div>
@@ -675,17 +528,6 @@
         <div id="library-content" class="molecule-grid"></div>
         <div id="library-pages" class="actions"></div>
       </section>
-      <section id="models-view" class="app-view" hidden>
-        <div class="page-heading">
-          <div>
-            <p class="breadcrumb">高级工具 / 模型</p>
-            <h1>模型管理</h1>
-            <p>检查预训练模型来源、数据集和适用任务。</p>
-          </div>
-        </div>
-        <p id="model-verification" role="status"></p>
-        <div id="model-content" class="panel"></div>
-      </section>
 
       <section id="designs-view" class="app-view" hidden>
         <div class="page-heading">
@@ -700,57 +542,7 @@
         </div>
         <div id="saved-designs" class="panel"></div>
       </section>
-      <section id="prepare-view" class="app-view" hidden>
-        <div class="page-heading">
-          <div>
-            <p class="breadcrumb">结构处理</p>
-            <h1>数据准备</h1>
-            <p>读取真实 PDB，选择需要的链和组分；保留原坐标。</p>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="actions">
-            <label
-              >蛋白 PDB<input
-                id="prepare-file"
-                type="file"
-                accept=".pdb" /></label
-            ><button id="prepare-current">使用当前蛋白</button>
-          </div>
-          <div class="viewer-tools checks">
-            <label
-              ><input
-                id="prepare-water"
-                type="checkbox"
-                checked
-              />移除水分子</label
-            ><label
-              ><input
-                id="prepare-ligands"
-                type="checkbox"
-                checked
-              />保留配体与其他非蛋白组分</label
-            ><label
-              ><input id="prepare-hydrogens" type="checkbox" />移除氢原子</label
-            >
-          </div>
-          <fieldset>
-            <legend>保留哪些链</legend>
-            <div id="prepare-chains" class="viewer-tools checks"></div>
-          </fieldset>
-          <div class="actions">
-            <button id="prepare-run" class="primary">应用处理</button
-            ><button id="prepare-download" disabled>下载处理后的 PDB</button
-            ><button id="prepare-use" disabled>用于分子设计</button>
-          </div>
-          <p id="prepare-status" role="status">
-            上传 PDB 或读取当前蛋白后开始。
-          </p>
-          <p class="hint">
-            这里进行组分筛选，不会自动补全缺失原子、加氢或改变质子化状态。
-          </p>
-        </div>
-      </section>
+
       <section id="compare-view" class="app-view" hidden>
         <div class="page-heading">
           <div>
@@ -772,17 +564,55 @@
         </div>
       </section>
     </main>
+    <dialog id="prepare-dialog">
+      <div class="panel-heading">
+        <h2>整理当前蛋白</h2>
+        <button
+          type="button"
+          class="dialog-close icon-button"
+          aria-label="关闭蛋白处理"
+        >
+          ×
+        </button>
+      </div>
+      <div class="viewer-tools checks">
+        <label
+          ><input id="prepare-water" type="checkbox" checked />移除水分子</label
+        ><label
+          ><input
+            id="prepare-ligands"
+            type="checkbox"
+            checked
+          />保留配体与其他非蛋白组分</label
+        ><label
+          ><input id="prepare-hydrogens" type="checkbox" />移除氢原子</label
+        >
+      </div>
+      <fieldset>
+        <legend>保留哪些链</legend>
+        <div id="prepare-chains" class="viewer-tools checks"></div>
+      </fieldset>
+      <div class="actions">
+        <button id="prepare-run" class="primary">应用处理</button
+        ><button id="prepare-download" disabled>下载处理后的 PDB</button
+        ><button id="prepare-use" disabled>用于分子设计</button>
+      </div>
+      <p id="prepare-status" role="status">正在读取当前蛋白…</p>
+      <p class="hint">
+        这里进行组分筛选，不会自动补全缺失原子、加氢或改变质子化状态。
+      </p>
+    </dialog>
     <footer id="action-bar" class="action-bar">
       <div class="footer-status">
         <img
           class="icon"
           src="/assets/vendor/tabler/circle-check.svg"
           alt=""
-        /><strong id="ready-label">正在读取结构</strong
-        ><span id="target-label">目标生成 3 个候选</span>
+        /><strong id="ready-label">请先选择蛋白</strong
+        ><span id="target-label"></span>
       </div>
       <div class="footer-actions">
-        <button id="save-draft" type="button">
+        <button id="save-draft" disabled type="button">
           <img
             class="icon"
             src="/assets/vendor/tabler/device-floppy.svg"
@@ -790,6 +620,7 @@
           />保存设计</button
         ><button
           id="generate"
+          disabled
           form="generate-form"
           class="primary"
           type="submit"
@@ -798,7 +629,7 @@
             class="icon"
             src="/assets/vendor/tabler/player-play.svg"
             alt=""
-          /><span id="generate-label">开始生成 3 个分子</span></button
+          /><span id="generate-label">开始生成</span></button
         ><small id="health">正在检查计算环境…</small>
       </div>
     </footer>
@@ -947,7 +778,18 @@
           <img class="icon" src="/assets/vendor/tabler/x.svg" alt="" />
         </button>
       </div>
-      <div id="info-body"></div>
+      <div id="info-body">
+        <p>
+          先上传蛋白，再用参考配体或直接点选残基确定口袋。选择设计任务与预设，即可开始计算。
+        </p>
+        <p>
+          局部结构设计需要三维起始分子；在预览中选择保留的整环或原子。图形编辑与反馈在任务结果中完成。
+        </p>
+        <p>
+          QED 和 SA
+          是计算指标，不是结合活性。人工反馈保存在设计记录中，不会自动训练模型。
+        </p>
+      </div>
     </dialog>
   </body>
 </html>

@@ -4,7 +4,7 @@
   }
   .input-panel,
   .pocket-preview-panel {
-    height: 475px;
+    min-height: 475px;
   }
   #pocket-viewer {
     height: 384px;
@@ -77,31 +77,14 @@
   .viewer-legend small {
     display: none;
   }
-  .stepper {
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-  .step small {
-    font-size: 11px;
-  }
-  .step strong {
-    font-size: 14px;
-  }
+
   .generation-grid {
     gap: 15px;
   }
   .generation-grid > div {
     gap: 7px 10px;
   }
-  .model-grid {
-    gap: 12px;
-  }
-  .model-grid label {
-    gap: 8px;
-  }
-  .model-grid button {
-    padding-inline: 8px;
-  }
+
   .footer-status span {
     display: none;
   }
@@ -122,10 +105,7 @@
     justify-content: center;
     padding: 10px;
   }
-  .nav-item .nav-hint,
-  .nav-item .tag,
-  .nav-label,
-  .sidebar-bottom .tiny-icon {
+  .nav-label {
     display: none;
   }
   .nav-item .icon {
@@ -135,9 +115,7 @@
   .sidebar hr {
     margin: 24px 9px;
   }
-  .sidebar-bottom {
-    font-size: 0;
-  }
+
   .design-top {
     grid-template-columns: 1fr 1.25fr;
   }
@@ -151,19 +129,7 @@
   .field-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .stepper {
-    gap: 8px;
-  }
-  .step {
-    gap: 8px;
-  }
-  .step-line {
-    min-width: 18px;
-  }
-  .step-number {
-    width: 33px;
-    height: 33px;
-  }
+
   .panel-heading h2 {
     font-size: 18px;
   }
@@ -188,12 +154,7 @@
   .generation-grid > div {
     grid-template-columns: 100px 1fr;
   }
-  .model-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .topbar #project {
-    width: 125px;
-  }
+
   .header-actions button {
     font-size: 0;
   }
@@ -203,28 +164,7 @@
   .page-heading p:last-child {
     font-size: 14px;
   }
-  .mode-switch button {
-    min-width: 75px;
-    padding-inline: 10px;
-  }
-  .stepper {
-    padding: 7px 0;
-    height: 65px;
-  }
-  .step small {
-    display: none;
-  }
-  .step strong {
-    font-size: 12px;
-  }
-  .step-number {
-    width: 29px;
-    height: 29px;
-    font-size: 15px;
-  }
-  .step-line {
-    margin-top: 13px;
-  }
+
   .footer-status {
     font-size: 12px;
     gap: 6px;
@@ -282,13 +222,7 @@
     width: 30px;
     height: 30px;
   }
-  .topbar #project {
-    width: 130px;
-    font-size: 12px;
-  }
-  .header-actions button:not(#help-button) {
-    display: none;
-  }
+
   .main-content {
     padding: 12px 10px 115px;
   }
@@ -299,29 +233,11 @@
   .page-heading h1 {
     font-size: 23px;
   }
-  .mode-switch button {
-    font-size: 12px;
-    padding-inline: 8px;
-    min-width: 65px;
-  }
+
   .page-heading p:last-child {
-    max-width: 190px;
     font-size: 12px;
   }
-  .step strong {
-    display: none;
-  }
-  .step small {
-    display: none;
-  }
-  .stepper {
-    padding: 0 14px;
-    height: 48px;
-    align-items: flex-start;
-  }
-  .step-line {
-    max-width: none;
-  }
+
   .input-panel {
     padding: 12px;
   }
@@ -361,13 +277,7 @@
   .pocket-preview-panel {
     padding: 6px;
   }
-  .model-grid {
-    grid-template-columns: 1fr;
-  }
-  .model-grid label {
-    display: grid;
-    grid-template-columns: 80px 1fr;
-  }
+
   .field-grid {
     grid-template-columns: 1fr;
   }
@@ -444,12 +354,7 @@
   .navigation-open .nav-item {
     font-size: 15px;
   }
-  .navigation-open .nav-label,
-  .navigation-open .nav-hint {
+  .navigation-open .nav-label {
     display: block;
-  }
-  .navigation-open .sidebar-bottom {
-    position: static;
-    margin-top: 20px;
   }
 }

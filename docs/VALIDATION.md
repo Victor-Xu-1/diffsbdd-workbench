@@ -2,7 +2,25 @@
 
 Local release verification, 2026-09-29 (UTC). Hardware: Windows 11 / Ubuntu WSL2, NVIDIA RTX 5060 Laptop 8151 MiB, 32 GB host RAM. Python 3.10.20, PyTorch 2.7.1+cu128. This records observed behavior; it is not a drug-discovery benchmark or a guarantee of model validity for other targets.
 
-## Version 0.2 operational-page correction
+## Version 0.3 UI consolidation
+
+Baseline: `bf51dad6fafa8871a6ed759fccabd79170ad9425`. This change removes the remaining duplicate presentation layers, rather than cloning every reference-image module. Native inference, weights and dependencies are unchanged.
+
+| Change | Risk | Evidence |
+|---|---|---|
+| Capability-driven form, task list, models and presets | UI values diverge from backend; irrelevant options get submitted | `DesignOptions` schema supplies bounds/defaults/enums; backend preset validation; real API and browser compare the contract with controls; frontend projection excludes inactive values |
+| Empty initial state and explicit example load | False filename/readiness; unavailable configuration appears usable | Chrome checks empty input and disabled submission, then actual parsing; controlled HTTP failure verifies visible error and no fake success |
+| Remove duplicate modules/controls | Necessary functions become unreachable | Browser verifies saved designs, contextual protein preparation, model choice, candidate library, comparison and the advanced section; retired DOM entries are absent and IDs are unique |
+| Unified continuation choices | Wrong molecule/task reaches native inference | Full CUDA browser run covers edit feedback, selected continuation, optimization, fixed-atom inference, trajectory and cancellation |
+| Context-specific settings in result records | Ignored defaults misrepresented as active settings | Actual native task reports rendered through the same applicability contract; original downloadable records are unchanged |
+
+Current local results: **45 backend tests**, **6 frontend tests**; operational-page Chrome suite, original UI/editor/download suite and four viewport checks passed. The layout focus regression uses actual keyboard events; the initial failure exposed pointer-modality assumptions and the mobile example button's obsolete hidden style, both corrected without reducing the assertions.
+
+Real GPU run: generation `d5a568ac2a93442880eeaccfde931876` (**2/2 valid**), optimization `fd924f556f5c42ef8955e825c0b4f1f0` (**6/6 valid** over two rounds), inpainting `6a8127b32d3741ba9247e91258365e9a` (**1/1 valid**) and cancellation. Commands are the README test commands, with `DIFFSBDD_TEST_URL=http://127.0.0.1:17865` and `PLAYWRIGHT_CHANNEL=chrome`. Later report-display/CSS cleanup was retested through the affected UI suites; no further inference changes were made.
+
+Compatibility: adds read-only `/api/capabilities`; existing input, job, edit and saved-design contracts remain intact. Rendering checks, text-safe DOM construction, same-origin mutation protections, and the pinned model loader remain in place. Training/full dataset evaluation remain outside the user-confirmed scope.
+
+## Version 0.2 operational-page correction (historical)
 
 Baseline: `eaf6ae4925719a08ce5a221ecb941adbf3807eb9`. No model, checkpoint, dependency or upstream-patch change. Development used an isolated worktree and port 17865; production data was not copied into test fixtures.
 

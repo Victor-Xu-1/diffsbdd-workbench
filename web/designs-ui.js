@@ -4,11 +4,7 @@ let current = null,
   callbacks;
 export async function refreshDesigns() {
   const records = await api("/api/designs");
-  const selected = current?.id || "example";
-  $("project").replaceChildren(new Option("当前设计", "example"));
-  for (const record of records)
-    $("project").add(new Option(record.name, record.id));
-  $("project").value = selected;
+  $("current-design").textContent = current?.name || "未保存的设计";
   $("saved-designs").replaceChildren();
   if (!records.length) {
     $("saved-designs").textContent =
@@ -23,6 +19,7 @@ export async function refreshDesigns() {
     const detail = document.createElement("span");
     detail.textContent = `版本 ${record.revision} · ${new Date(record.updated_at).toLocaleString()}`;
     const open = document.createElement("button");
+    open.dataset.design = record.id;
     open.textContent = "打开并继续";
     open.addEventListener(
       "click",
@@ -40,7 +37,7 @@ async function openDesign(id) {
   const record = await api(`/api/designs/${id}`);
   await callbacks.restore(record.request);
   current = record;
-  $("project").value = id;
+  $("current-design").textContent = record.name;
   callbacks.notice(`已打开“${record.name}”，结构与参数均已恢复。`);
 }
 async function save(update) {
@@ -60,7 +57,7 @@ async function save(update) {
   current = record;
   await refreshDesigns();
   $("save-design-dialog").close();
-  callbacks.notice(`已保存“${record.name}”，可从顶部列表或“已保存设计”继续。`);
+  callbacks.notice(`已保存“${record.name}”，可从“已保存设计”继续。`);
 }
 export function setupDesigns(handlers) {
   callbacks = handlers;
@@ -90,19 +87,12 @@ export function setupDesigns(handlers) {
     void action(false);
   });
   $("design-update").addEventListener("click", () => void action(true));
-  $("project").addEventListener(
-    "change",
-    run(async () => {
-      if ($("project").value !== "example")
-        await openDesign($("project").value);
-    }, callbacks.onError),
-  );
   $("new-design").addEventListener(
     "click",
     run(async () => {
       current = null;
       await callbacks.newDesign();
-      $("project").value = "example";
+      $("current-design").textContent = "未保存的设计";
     }, callbacks.onError),
   );
 }

@@ -1,4 +1,5 @@
-import { $, schema } from "./controls.js";
+import { $ } from "./controls.js";
+import { getContract, fieldActive } from "./contract.js";
 import { friendlyError, link, labels } from "./api.js";
 
 export function orderedMolecules(molecules, sort = "original", filter = "all") {
@@ -128,15 +129,36 @@ export function renderStatus(job, error) {
     line.textContent = report.bond_reconstruction;
     $("run-settings").append(line);
   }
+  const contract = getContract(),
+    model = contract.models.find((model) => model.id === settings.model);
+  const context = {
+    ...settings,
+    task: settings.task || job.task,
+    strategy: model?.strategy,
+  };
   const entries = [
-    ["model", "模型"],
-    ...schema.map(([id, title]) => [id, title]),
+    ["model", { label: "模型" }],
+    ...Object.entries(contract.fields).filter(([, field]) =>
+      fieldActive(field, context),
+    ),
   ];
-  for (const [key, title] of entries)
+  for (const [key, field] of entries)
     if (settings[key] !== undefined) {
       const line = document.createElement("span");
       line.className = "setting";
-      line.textContent = `${title}：${settings[key]}`;
+      const raw = settings[key];
+      const value =
+        key === "model"
+          ? model?.label || raw
+          : (field.choices?.find((choice) => choice.value === raw)?.label ??
+            (Array.isArray(raw)
+              ? raw.map((index) => index + 1).join(", ")
+              : typeof raw === "boolean"
+                ? raw
+                  ? "开启"
+                  : "关闭"
+                : raw));
+      line.textContent = `${field.label}：${value}`;
       $("run-settings").append(line);
     }
   $("rejections").replaceChildren();

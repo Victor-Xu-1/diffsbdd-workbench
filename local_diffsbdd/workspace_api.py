@@ -16,6 +16,13 @@ from .messages import public_message
 router = APIRouter(prefix="/api")
 
 
+@router.get("/capabilities")
+def ui_capabilities():
+    from .capabilities import capabilities
+
+    return capabilities()
+
+
 def failure(exc):
     return HTTPException(
         409 if isinstance(exc, RevisionConflict) else 422, public_message(exc)

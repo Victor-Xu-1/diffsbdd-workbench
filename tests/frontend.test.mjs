@@ -73,27 +73,71 @@ test("ligand representations retain conventional element colors and distinct geo
   assert.ok(!ligandStyle("sticks", FIGURE_DEFAULTS).sphere);
 });
 
-import { presetOptions } from "../web/presets.js";
-test("simple presets produce bounded, task-specific settings", () => {
-  for (const task of ["generate", "inpaint", "optimize", "diversify"])
-    for (const level of ["quick", "standard", "explore"]) {
-      const options = presetOptions(task, level);
-      assert.ok(options.count <= 100);
-      assert.ok(options.steps <= 500);
-      if (task === "inpaint") {
-        assert.equal(options.relaxation, 0);
-        assert.equal(options.fragment_policy, "all");
-      }
-      if (task === "optimize") {
-        assert.ok(options.population * options.rounds <= 100);
-        assert.ok(options.survivors <= options.population);
-      }
-    }
-  assert.equal(presetOptions("generate", "quick").steps, 100);
-  assert.equal(presetOptions("generate", "standard").steps, 500);
-  assert.notEqual(
-    presetOptions("diversify", "quick").change_steps,
-    presetOptions("diversify", "explore").change_steps,
-  );
+import {
+  configureContract,
+  fieldActive,
+  projectOptions,
+  presetOptions,
+} from "../web/contract.js";
+test("capability projection excludes inactive options and retains enforced native constraints", () => {
+  configureContract({
+    schema: 1,
+    fields: {
+      count: { when: [{ task: ["generate", "inpaint"] }] },
+      atoms: { when: [{ task: ["generate"], size_mode: ["fixed"] }] },
+      steps: { when: [{ task: ["generate", "inpaint"] }] },
+      change_steps: { when: [{ task: ["optimize"] }] },
+      fixed_atoms: { when: [{ task: ["inpaint"] }] },
+    },
+    tasks: {
+      generate: {
+        presets: [{ id: "trial", options: { count: 7, steps: 80 } }],
+      },
+      optimize: {},
+      inpaint: { forced: { fragment_policy: "all", relaxation: 0 } },
+    },
+    models: [
+      {
+        id: "conditional",
+        installed: true,
+        strategy: "cond",
+        tasks: ["generate", "optimize", "inpaint"],
+      },
+      { id: "joint", strategy: "joint", tasks: ["generate"] },
+    ],
+    rules: [
+      { when: { task: ["inpaint"], trajectory: [true] }, set: { count: 1 } },
+    ],
+  });
+  assert.deepEqual(presetOptions("generate", "trial"), { count: 7, steps: 80 });
   assert.throws(() => presetOptions("generate", "missing"));
+  assert.equal(
+    fieldActive({ when: [{ strategy: ["joint"] }] }, { strategy: "cond" }),
+    false,
+  );
+  const result = projectOptions({
+    task: "optimize",
+    model: "conditional",
+    steps: 9999,
+    atoms: 1000,
+    count: 1000,
+    change_steps: 75,
+  });
+  assert.deepEqual(result, {
+    task: "optimize",
+    model: "conditional",
+    change_steps: 75,
+  });
+  const inpaint = projectOptions({
+    task: "inpaint",
+    model: "conditional",
+    count: 30,
+    steps: 500,
+    fixed_atoms: [1, 2],
+    trajectory: true,
+  });
+  assert.equal(inpaint.count, 1);
+  assert.equal(inpaint.fragment_policy, "all");
+  assert.equal(inpaint.relaxation, 0);
+  assert.throws(() => projectOptions({ task: "optimize", model: "joint" }));
 });

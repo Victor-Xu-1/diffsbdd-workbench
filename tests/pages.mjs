@@ -23,6 +23,30 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(base, { waitUntil: "networkidle" });
+  assert.equal(await page.locator("#generate").isDisabled(), true);
+  assert.equal(await page.locator("#protein-read").isVisible(), false);
+  assert.equal(
+    await page
+      .locator(
+        "#project, #models-view, #prepare-view, #settings-help, #expert-mode, #guided-mode, #reuse, #verify-model, .stepper",
+      )
+      .count(),
+    0,
+  );
+  assert.deepEqual(
+    await page.evaluate(() => {
+      const seen = new Set();
+      return [...document.querySelectorAll("[id]")]
+        .map((el) => el.id)
+        .filter((id) => {
+          if (seen.has(id)) return true;
+          seen.add(id);
+          return false;
+        });
+    }),
+    [],
+  );
+  await page.locator("#load-example").click();
   await page.waitForFunction(
     () =>
       document.querySelector("#pocket-confirm-title").textContent ===
@@ -39,6 +63,43 @@ try {
   await page.locator("[data-preset=standard]").click();
   assert.equal(await page.locator("#count").inputValue(), "10");
   assert.equal(await page.locator("#steps").inputValue(), "500");
+  const contract = await (
+    await context.request.get(`${base}/api/capabilities`)
+  ).json();
+  assert.equal(await page.locator("#model").count(), 1);
+  assert.equal(
+    await page.locator("#count").getAttribute("max"),
+    String(contract.fields.count.maximum),
+  );
+  assert.equal(
+    await page.locator("#model option").count(),
+    contract.models.length,
+  );
+  if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+    await page.locator("#advanced-settings > summary").click();
+  await page.locator("[data-preset=quick]").click();
+  await page.locator("#atoms").fill("9999");
+  await page.locator("[data-task=optimize]").click();
+  assert.equal(await page.locator("#atoms").isVisible(), false);
+  assert.equal(await page.locator("#atoms").isDisabled(), true);
+  const projected = await page.evaluate(async () =>
+    (await import("/assets/controls.js")).readOptions(),
+  );
+  assert.ok(
+    !("atoms" in projected) &&
+      !("steps" in projected) &&
+      !("size_mode" in projected) &&
+      !("count" in projected),
+  );
+  assert.equal(
+    projected.population * projected.rounds,
+    contract.tasks.optimize.presets.find(
+      (p) => p.id === contract.default_preset,
+    ).attempts,
+  );
+  await page.locator("[data-task=generate]").click();
+  if (await page.locator("#advanced-settings").evaluate((el) => el.open))
+    await page.locator("#advanced-settings > summary").click();
   await page.locator("label[for=count] .field-help button").hover();
   await page.locator("#help-count").waitFor({ state: "visible" });
   assert.match(await page.locator("#help-count").innerText(), /最终有效数量/);
@@ -59,7 +120,8 @@ try {
   assert.match(record.request.protein_text, /ATOM/);
   await page.locator("#save-design-dialog").waitFor({ state: "hidden" });
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator("#project").selectOption(record.id);
+  await page.locator("[data-view=designs].nav-item").click();
+  await page.locator(`[data-design="${record.id}"]`).click();
   await page.waitForFunction(() =>
     document.querySelector("#notice").textContent.includes("均已恢复"),
   );
@@ -70,8 +132,8 @@ try {
     .getByRole("button", { name: "打开并继续" })
     .first()
     .waitFor();
-  await page.locator("[data-view=prepare]").click();
-  await page.locator("#prepare-current").click();
+  await page.locator("[data-task=generate]").click();
+  await page.locator("#prepare-open").click();
   await page.waitForFunction(() =>
     document.querySelector("#prepare-status").textContent.startsWith("已处理"),
   );
@@ -156,6 +218,20 @@ try {
       chosen = Boolean(await page.locator("#fixed-atoms").inputValue());
     }
   assert.ok(chosen, "Could not select an actual starting ligand atom/ring");
+  if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+    await page.locator("#advanced-settings > summary").click();
+  await page.locator("#fixed-atoms").fill("invalid");
+  await page.locator("#fragment-pick").focus();
+  assert.equal(
+    await page.locator("#fixed-atoms").evaluate((el) => el.checkValidity()),
+    false,
+  );
+  assert.equal(await page.locator("#generate").isDisabled(), true);
+  await page.locator("#keep-scaffold").click();
+  assert.equal(
+    await page.locator("#fixed-atoms").evaluate((el) => el.checkValidity()),
+    true,
+  );
   assert.match(
     await page.locator("#fragment-count").innerText(),
     /已保留 [1-9]/,
@@ -173,16 +249,7 @@ try {
   await page.locator("#compare-run").click();
   await page.locator("#compare-output table").waitFor();
   assert.match(await page.locator("#compare-output").innerText(), /平均 QED/);
-  await page.locator("[data-view=models]").click();
-  const verify = page.locator("[data-verify-model]").first();
-  if (await verify.isEnabled()) {
-    await verify.click();
-    await page.waitForFunction(() =>
-      document
-        .querySelector("#model-verification")
-        .textContent.includes("完整"),
-    );
-  }
+  await page.locator("[data-task=generate]").click();
   await page.locator("#nav-results").click();
   const jobs = await (await context.request.get(`${base}/api/jobs`)).json();
   if (jobs.length >= 2) {
@@ -223,8 +290,37 @@ try {
     path: path.join(root, "test-results/pages/desktop.png"),
   });
   assert.deepEqual(errors, []);
+  const unavailable = await context.newPage();
+  await unavailable.route("**/api/capabilities", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "配置暂时无法读取" }),
+    }),
+  );
+  await unavailable.goto(base, { waitUntil: "networkidle" });
+  assert.equal(await unavailable.locator("#generate").isDisabled(), true);
+  assert.equal(await unavailable.locator("#protein-read").isVisible(), false);
+  assert.equal(await unavailable.locator("#error").isVisible(), true);
+  await unavailable.close();
+  await page.locator("[data-view=designs].nav-item").click();
+  await page.locator("#new-design").click();
+  assert.equal(await page.locator("#protein-name").innerText(), "尚未选择蛋白");
+  assert.equal(await page.locator("#generate").isDisabled(), true);
+  assert.equal(
+    await page.locator("#current-design").innerText(),
+    "未保存的设计",
+  );
+  assert.equal(
+    await page.locator("#count").inputValue(),
+    String(
+      contract.tasks.generate.presets.find(
+        (p) => p.id === contract.default_preset,
+      ).options.count,
+    ),
+  );
   console.log(
-    "Passed: direct fragment/ring selection, scaffold selection, batch SDF export, actual task comparison and model page",
+    "Passed: direct fragment/ring selection, scaffold selection, batch SDF export, actual task comparison and model choices",
   );
 } catch (error) {
   if (page) {

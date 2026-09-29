@@ -86,6 +86,12 @@ function style() {
   return surfaceTask;
 }
 export function showPocket(value, onResidue) {
+  element().hidden = false;
+  $("pocket-empty").hidden = true;
+  for (const button of document.querySelectorAll(
+    '[data-figure="pocket"], [data-pocket-style], #pocket-reset, #pocket-fullscreen',
+  ))
+    button.disabled = false;
   const camera =
     viewer && data?.protein === value.protein && data?.initial === value.initial
       ? viewer.getView()
@@ -121,6 +127,24 @@ export function resetPocket() {
     60,
   );
 }
+export function clearPocket() {
+  data = null;
+  ++serial;
+  if (viewer) {
+    viewer.removeAllModels();
+    viewer.removeAllSurfaces();
+    viewer.removeAllShapes();
+    viewer.removeAllLabels();
+    viewer.render();
+  }
+  element().hidden = true;
+  element().dataset.ready = "false";
+  $("pocket-empty").hidden = false;
+  for (const button of document.querySelectorAll(
+    '[data-figure="pocket"], [data-pocket-style], #pocket-reset, #pocket-fullscreen',
+  ))
+    button.disabled = true;
+}
 function clickTargets() {
   if (!viewer || !data) return;
   const fragment =
@@ -135,7 +159,17 @@ function clickTargets() {
   viewer.render();
 }
 function paintAtoms() {
-  const indices = parseAtomNumbers($("fixed-atoms").value);
+  const input = $("fixed-atoms");
+  let indices;
+  try {
+    indices = parseAtomNumbers(input.value);
+    input.setCustomValidity("");
+  } catch (error) {
+    input.setCustomValidity(error.message);
+    $("fragment-count").textContent = "原子编号无效";
+    $("pocket-viewer-note").textContent = error.message;
+    return;
+  }
   $("fragment-count").textContent = `已保留 ${indices.length} 个原子`;
   for (const id of ["keep-scaffold", "keep-periphery"])
     $(id).disabled = !data?.initial;
