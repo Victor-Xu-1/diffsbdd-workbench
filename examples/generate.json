@@ -1,0 +1,9 @@
+{
+  "task": "generate",
+  "model": "crossdocked_fullatom_cond",
+  "count": 3,
+  "atoms": 24,
+  "steps": 500,
+  "seed": 2026,
+  "fragment_policy": "largest"
+}

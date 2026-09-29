@@ -1,0 +1,34 @@
+diff --git a/lightning_modules.py b/lightning_modules.py
+index 9c10293..3884a34 100644
+--- a/lightning_modules.py
++++ b/lightning_modules.py
+@@ -12,7 +12,7 @@ import pytorch_lightning as pl
+ import wandb
+ from torch_scatter import scatter_add, scatter_mean
+ from Bio.PDB import PDBParser
+-from Bio.PDB.Polypeptide import three_to_one
++from Bio.Data.PDBData import protein_letters_3to1
+ 
+ from constants import dataset_params, FLOAT_TYPE, INT_TYPE
+ from equivariant_diffusion.dynamics import EGNNDynamics
+@@ -718,7 +718,7 @@ class LigandPocketDDPM(pl.LightningModule):
+                 [res['CA'].get_coord() for res in biopython_residues]),
+                 device=self.device, dtype=FLOAT_TYPE)
+             pocket_types = torch.tensor(
+-                [self.pocket_type_encoder[three_to_one(res.get_resname())]
++                [self.pocket_type_encoder[protein_letters_3to1[res.get_resname().upper()]]
+                  for res in biopython_residues], device=self.device)
+         else:
+             pocket_atoms = [a for res in biopython_residues
+diff --git a/optimize.py b/optimize.py
+index aaa9ec7..309cf9f 100644
+--- a/optimize.py
++++ b/optimize.py
+@@ -130,6 +130,7 @@ def diversify_ligands(model, pocket, mols, timesteps,
+     # Build mol objects
+     x = out_lig[:, :model.x_dims].detach().cpu()
+     atom_type = out_lig[:, model.x_dims:].argmax(1).detach().cpu()
++    lig_mask = lig_mask.cpu()
+ 
+     molecules = []
+     for mol_pc in zip(utils.batch_to_list(x, lig_mask),

@@ -1,0 +1,47 @@
+name: Workbench checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  cpu-and-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.10'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install the CPU subset under production constraints
+        run: |
+          python -m pip install uv==0.11.28
+          uv pip compile tools/cpu-requirements.in -c requirements.lock --generate-hashes -o "$RUNNER_TEMP/cpu.lock" --quiet
+          uv pip sync "$RUNNER_TEMP/cpu.lock" --system --require-hashes
+      - name: Backend, real HTTP and chemistry tests
+        run: python -m unittest discover -s tests -v
+      - name: Python and deployment checks
+        run: |
+          uvx --from ruff==0.15.7 ruff check local_diffsbdd tests tools
+          uvx --from ruff==0.15.7 ruff format --check local_diffsbdd tests tools
+          python -m compileall -q local_diffsbdd tests tools
+          python tools/vendor_assets.py --verify
+          bash -n install.sh web.sh
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npx prettier --check 'web/*.js' 'web/**/*.css' 'web/*.html' 'tests/*.mjs'
+      - run: npx playwright install --with-deps chromium
+      - name: Real browser integration using labelled generated fixture
+        run: |
+          python -m tests.serve_fixture > "$RUNNER_TEMP/ui-server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:17865/ > /dev/null; then break; fi
+            sleep 1
+          done
+          DIFFSBDD_TEST_URL=http://127.0.0.1:17865 npm run test:e2e -- --ui-only
+          DIFFSBDD_TEST_URL=http://127.0.0.1:17865 node tests/layout.mjs
+      # Full GPU inference is verified locally; see docs/VALIDATION.md.

@@ -1,0 +1,85 @@
+{
+  "source": "https://zenodo.org/records/8183747",
+  "models": [
+    {
+      "id": "crossdocked_ca_cond",
+      "file": "crossdocked_ca_cond.ckpt",
+      "dataset": "crossdocked",
+      "representation": "ca",
+      "strategy": "cond",
+      "bytes": 77536863,
+      "sha256": "cc96a8cbb52c94db638a9d56c7b381bc7e517418fbed6cd7e1bf1df488e5ff20",
+      "md5": "e29520a99ceefe244f08d0429312bf15"
+    },
+    {
+      "id": "moad_ca_joint",
+      "file": "moad_ca_joint.ckpt",
+      "dataset": "moad",
+      "representation": "ca",
+      "strategy": "joint",
+      "bytes": 16351613,
+      "sha256": "0b0fd3c9483afbe48f6717d3aa88fb216669c3f6e625646500f4db15331fd13c",
+      "md5": "d51ef07cd6d0d3ebfb430dcf65f23de7"
+    },
+    {
+      "id": "crossdocked_fullatom_cond",
+      "file": "crossdocked_fullatom_cond.ckpt",
+      "dataset": "crossdocked",
+      "representation": "fullatom",
+      "strategy": "cond",
+      "bytes": 17861341,
+      "sha256": "07f86764bf569aafbc40a9c15fc02de8e2550437dd0f17f657eab3abe66c372c",
+      "md5": "166b0c056b31ffdf31d489a63e91e05b"
+    },
+    {
+      "id": "crossdocked_ca_joint",
+      "file": "crossdocked_ca_joint.ckpt",
+      "dataset": "crossdocked",
+      "representation": "ca",
+      "strategy": "joint",
+      "bytes": 77612671,
+      "sha256": "b66cf6b6e61300c561c8d4c4418cb0e5474ed18a95524942460acb58449615f9",
+      "md5": "64ec4c3405afb847dc8fbb7a0e33c25b"
+    },
+    {
+      "id": "moad_ca_cond",
+      "file": "moad_ca_cond.ckpt",
+      "dataset": "moad",
+      "representation": "ca",
+      "strategy": "cond",
+      "bytes": 16321821,
+      "sha256": "ef5d62a07a031b9d2032f5ebf0835d9244706e71bb621fd36d9b305fec58e58f",
+      "md5": "487759042e9386c3afe22a0ae4cad898"
+    },
+    {
+      "id": "moad_fullatom_cond",
+      "file": "moad_fullatom_cond.ckpt",
+      "dataset": "moad",
+      "representation": "fullatom",
+      "strategy": "cond",
+      "bytes": 44720533,
+      "sha256": "58bd5f6c532e64a727f92779c6d3d7f274e5df7b0d345e4900a99dd341192561",
+      "md5": "49e0c0a3ca7468bd8998e353308e6cec"
+    },
+    {
+      "id": "moad_fullatom_joint",
+      "file": "moad_fullatom_joint.ckpt",
+      "dataset": "moad",
+      "representation": "fullatom",
+      "strategy": "joint",
+      "bytes": 44758069,
+      "sha256": "b16aebaab0a71ee0295c990fbea50cfca23aadf410fc263c646483653e99f494",
+      "md5": "d1294c7c81bb6016d5d712ce24f071a2"
+    },
+    {
+      "id": "crossdocked_fullatom_joint",
+      "file": "crossdocked_fullatom_joint.ckpt",
+      "dataset": "crossdocked",
+      "representation": "fullatom",
+      "strategy": "joint",
+      "bytes": 17875773,
+      "sha256": "4e0f8727c7e4c9d8c8963927ac218a9b6f777104c396f0f8c7aa4a0b88e598bd",
+      "md5": "f9291871ccf820d273607e4fb816cafc"
+    }
+  ]
+}

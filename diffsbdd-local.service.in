@@ -1,0 +1,25 @@
+[Unit]
+Description=DiffSBDD local molecular design workbench
+After=network.target
+
+[Service]
+Type=simple
+User=@UID@
+WorkingDirectory=@PACKAGE_DIR@
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=MPLBACKEND=Agg
+Environment=MPLCONFIGDIR=/opt/diffsbdd/state/matplotlib
+Environment=WANDB_MODE=disabled
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib
+ExecStart=/opt/diffsbdd/venv/bin/python -m local_diffsbdd.web
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=25
+KillMode=mixed
+NoNewPrivileges=true
+PrivateTmp=true
+MemoryMax=6G
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

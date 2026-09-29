@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+runs/
+verification/
+.env
+diffsbdd-local.service
+node_modules/
+test-results/
+playwright-report/
+*.log
+.venv/
+dist/

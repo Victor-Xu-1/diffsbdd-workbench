@@ -1,0 +1,7 @@
+# Test-only subset. Versions and hashes are constrained by requirements.lock.
+numpy
+scipy
+rdkit
+biopython
+fastapi
+uvicorn

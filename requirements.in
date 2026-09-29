@@ -1,0 +1,24 @@
+# Deployment dependencies for the official DiffSBDD model on RTX 50-series.
+# CUDA 12.8 / PyTorch 2.7 support Blackwell; the upstream CUDA 11.8 build does not.
+torch==2.7.1+cu128
+torch-scatter==2.1.2+pt27cu128
+pytorch-lightning==2.6.6
+torchmetrics==1.4.2
+numpy==1.26.4
+scipy==1.13.1
+rdkit==2023.9.6
+openbabel-wheel==3.1.1.22
+biopython==1.88
+networkx==3.3
+pandas==2.2.2
+imageio==2.21.2
+seaborn==0.13.2
+matplotlib==3.9.2
+wandb==0.30.0
+protobuf==7.36.2
+PyYAML==6.0.2
+tqdm==4.66.5
+psutil==6.1.1
+setuptools==84.0.0
+fastapi==0.141.1
+uvicorn==0.54.0
