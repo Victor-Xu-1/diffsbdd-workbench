@@ -1,4 +1,5 @@
 /** The sole chemical-editor boundary. Models and UI never depend on editor DOM. */
+let queue = Promise.resolve();
 let initialized,
   sequence = 0;
 
@@ -39,7 +40,13 @@ export async function loadEditor(molblock) {
   const current = ++sequence;
   const editor = await ready();
   if (current !== sequence) return;
-  await editor.setMolecule(molblock);
+  const apply = async () => {
+    if (current === sequence) await editor.setMolecule(molblock);
+  };
+  // Each caller receives its own rejection; a failed import does not block
+  // subsequent user selections, which are serialized to prevent stale edits.
+  queue = queue.then(apply, apply);
+  await queue;
 }
 
 export async function exportEditor() {

@@ -44,4 +44,5 @@ jobs:
           done
           DIFFSBDD_TEST_URL=http://127.0.0.1:17865 npm run test:e2e -- --ui-only
           DIFFSBDD_TEST_URL=http://127.0.0.1:17865 node tests/layout.mjs
+          DIFFSBDD_TEST_URL=http://127.0.0.1:17865 node tests/pages.mjs
       # Full GPU inference is verified locally; see docs/VALIDATION.md.

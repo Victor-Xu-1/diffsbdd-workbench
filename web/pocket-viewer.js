@@ -1,3 +1,4 @@
+import { $, parseAtomNumbers, setAtomSelection } from "./controls.js";
 import { clearFigureLabels } from "./figure-labels.js";
 /** Input pocket visualization in unmodified PDB coordinates. */
 import {
@@ -19,7 +20,7 @@ let surfaceTask = Promise.resolve(),
 const element = () => document.getElementById("pocket-viewer");
 async function drawSurface(current) {
   viewer.removeAllSurfaces();
-  if (styleName !== "surface") {
+  if (styleName !== "surface" || !data.residues.length) {
     element().dataset.ready = "true";
     return;
   }
@@ -77,15 +78,18 @@ function style() {
   viewer.setStyle({ model: 2 }, {});
   const reference = viewer.getModel(1).selectedAtoms({});
   residueContext(viewer, settings, reference);
-  viewer.setClickable({ model: 0, hetflag: false }, true, (atom) =>
-    selectResidue?.(`${atom.chain}:${atom.resi}`),
-  );
+  clickTargets();
+  paintAtoms();
   viewer.resize();
   viewer.render();
   surfaceTask = drawSurface(current);
   return surfaceTask;
 }
 export function showPocket(value, onResidue) {
+  const camera =
+    viewer && data?.protein === value.protein && data?.initial === value.initial
+      ? viewer.getView()
+      : null;
   data = value;
   selectResidue = onResidue;
   if (!viewer)
@@ -98,16 +102,108 @@ export function showPocket(value, onResidue) {
   viewer.removeAllModels();
   viewer.removeAllShapes();
   viewer.addModel(value.protein, "pdb");
-  viewer.addModel(value.reference || "", value.reference_format || "pdb");
+  viewer.addModel(
+    value.initial || value.reference || "",
+    value.initial ? "mol" : value.reference_format || "pdb",
+  );
   viewer.addModel(value.pocket, "pdb");
   void style().catch(surfaceError);
-  resetPocket();
+  if (camera) viewer.setView(camera);
+  else resetPocket();
+  viewer.render();
 }
 export function resetPocket() {
   if (!viewer) return;
-  resetCamera(viewer, data?.reference ? 1 : 2, data?.reference ? 0.65 : 1, 60);
+  resetCamera(
+    viewer,
+    data?.initial || data?.reference ? 1 : data?.residues.length ? 2 : 0,
+    data?.initial || data?.reference?.length ? 0.7 : 1,
+    60,
+  );
+}
+function clickTargets() {
+  if (!viewer || !data) return;
+  const fragment =
+    $("task").value === "inpaint" &&
+    $("pocket-selection-mode").value === "fragment";
+  viewer.setClickable({ model: 0, hetflag: false }, !fragment, (atom) =>
+    selectResidue?.(`${atom.chain}:${atom.resi}`),
+  );
+  viewer.setClickable({ model: 1 }, fragment && !!data.initial, (atom) =>
+    pickFragment(atom.index),
+  );
+  viewer.render();
+}
+function paintAtoms() {
+  const indices = parseAtomNumbers($("fixed-atoms").value);
+  $("fragment-count").textContent = `已保留 ${indices.length} 个原子`;
+  for (const id of ["keep-scaffold", "keep-periphery"])
+    $(id).disabled = !data?.initial;
+  if (!viewer || !data) return;
+  viewer.setStyle({ model: 1 }, ligandStyle("stick", settings));
+  if (data.initial && $("task").value === "inpaint" && indices.length)
+    viewer.addStyle(
+      { model: 1, index: indices },
+      { sphere: { scale: 0.34, color: 0xefaa39 } },
+    );
+  viewer.render();
+}
+function pickFragment(index) {
+  if (
+    $("task").value !== "inpaint" ||
+    !data.initial ||
+    $("pocket-selection-mode").value !== "fragment"
+  )
+    return;
+  const group = new Set([index]);
+  if ($("fragment-pick").value === "ring") {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const ring of data.rings || [])
+        if (ring.some((i) => group.has(i)))
+          for (const i of ring)
+            if (!group.has(i)) {
+              group.add(i);
+              changed = true;
+            }
+    }
+  }
+  const selected = new Set(parseAtomNumbers($("fixed-atoms").value));
+  const remove = [...group].every((i) => selected.has(i));
+  for (const i of group) remove ? selected.delete(i) : selected.add(i);
+  setAtomSelection([...selected]);
+}
+export function highlightPocketSelection(ids) {
+  if (!viewer || !data) return;
+  viewer.setStyle({ model: 0, hetflag: false }, proteinStyle(settings));
+  viewer.addStyle(
+    { model: 0, predicate: (atom) => ids.has(`${atom.chain}:${atom.resi}`) },
+    { stick: { radius: 0.12, color: 0xe5a12b } },
+  );
+  viewer.render();
 }
 export function setupPocketViewer() {
+  $("pocket-selection-mode").addEventListener("change", clickTargets);
+  $("fixed-atoms").addEventListener("change", paintAtoms);
+  $("clear-fragment").addEventListener("click", () => setAtomSelection([]));
+  $("keep-scaffold").addEventListener("click", () => {
+    setAtomSelection(data?.scaffold_atoms || []);
+    if (!data?.scaffold_atoms?.length)
+      $("pocket-viewer-note").textContent =
+        "起始分子没有可提取的环骨架，请直接点选原子。";
+  });
+  $("keep-periphery").addEventListener("click", () => {
+    if (!data?.initial) return;
+    const core = new Set(data.scaffold_atoms);
+    setAtomSelection(
+      viewer
+        .getModel(1)
+        .selectedAtoms({})
+        .map((a) => a.index)
+        .filter((i) => !core.has(i)),
+    );
+  });
   settings = registerFigure("pocket", {
     viewer: () => viewer,
     element,

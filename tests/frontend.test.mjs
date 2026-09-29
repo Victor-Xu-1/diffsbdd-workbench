@@ -72,3 +72,28 @@ test("ligand representations retain conventional element colors and distinct geo
   assert.ok(ligandStyle("sphere", FIGURE_DEFAULTS).sphere);
   assert.ok(!ligandStyle("sticks", FIGURE_DEFAULTS).sphere);
 });
+
+import { presetOptions } from "../web/presets.js";
+test("simple presets produce bounded, task-specific settings", () => {
+  for (const task of ["generate", "inpaint", "optimize", "diversify"])
+    for (const level of ["quick", "standard", "explore"]) {
+      const options = presetOptions(task, level);
+      assert.ok(options.count <= 100);
+      assert.ok(options.steps <= 500);
+      if (task === "inpaint") {
+        assert.equal(options.relaxation, 0);
+        assert.equal(options.fragment_policy, "all");
+      }
+      if (task === "optimize") {
+        assert.ok(options.population * options.rounds <= 100);
+        assert.ok(options.survivors <= options.population);
+      }
+    }
+  assert.equal(presetOptions("generate", "quick").steps, 100);
+  assert.equal(presetOptions("generate", "standard").steps, 500);
+  assert.notEqual(
+    presetOptions("diversify", "quick").change_steps,
+    presetOptions("diversify", "explore").change_steps,
+  );
+  assert.throws(() => presetOptions("generate", "missing"));
+});

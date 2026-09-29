@@ -131,7 +131,7 @@ export function mountControls() {
     "trajectory",
   ])
     $(id).addEventListener("change", syncControls);
-  $("design-purpose").addEventListener("change", syncControls);
+
   syncControls();
 }
 export function syncControls() {
@@ -145,20 +145,12 @@ export function syncControls() {
       "固定所选片段的元素和空间位置，重建其余部分；化学键由坐标重建，再校验片段是否保留。",
     optimize: "从起始分子逐轮探索，按指定性质选择下一轮起点；不保证指标改善。",
   }[task];
-  if (task === "inpaint")
-    $("task-help").textContent +=
-      " " +
-      {
-        片段生长: "保留一个核心片段，指定新增原子数以延展周边结构。",
-        片段连接: "选择两个或多个片段中的保留原子，在原位尝试生成连接部分。",
-        骨架跃迁: "保留关键外围基团，释放需要替换的中心骨架原子。",
-        骨架修饰: "保留主体骨架，仅释放准备修改的局部原子。",
-        指定原子补全: "按所选原子掩码补全其余结构，可切换为仅固定元素和位置。",
-      }[$("design-purpose").value];
   $("custom-input").hidden = source === "demo";
   $("result-source").hidden = source !== "result";
   $("initial-input").hidden = task === "generate" || source === "result";
   $("inpaint-fields").hidden = task !== "inpaint";
+  $("fragment-toolbar").hidden = task !== "inpaint";
+  document.body.classList.toggle("fragment-design", task === "inpaint");
   $("optimization-fields").hidden = task !== "optimize";
   $("diversification-fields").hidden = task !== "diversify";
   $(
@@ -252,4 +244,12 @@ export async function readFile(id, limit, title) {
   if (!file || file.size > limit)
     throw new Error(`请选择${title}，文件不得超过 ${limit / 1000000} MB。`);
   return file.text();
+}
+
+export function setAtomSelection(indices) {
+  $("fixed-atoms").value = [...new Set(indices)]
+    .sort((a, b) => a - b)
+    .map((i) => i + 1)
+    .join(",");
+  $("fixed-atoms").dispatchEvent(new Event("change"));
 }

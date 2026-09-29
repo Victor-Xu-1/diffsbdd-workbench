@@ -78,11 +78,12 @@ class ApiTests(unittest.TestCase):
         cls.log.close()
         cls.temporary.cleanup()
 
-    def request(self, path, payload=None, headers=None):
+    def request(self, path, payload=None, headers=None, method=None):
         data = None if payload is None else json.dumps(payload).encode()
         request = Request(
             self.base + path,
             data=data,
+            method=method,
             headers={
                 "Content-Type": "application/json",
                 "X-DiffSBDD-Client": "local-ui",
@@ -94,6 +95,54 @@ class ApiTests(unittest.TestCase):
                 return response.status, response.read(), response.headers
         except HTTPError as error:
             return error.code, error.read(), error.headers
+
+    def test_saved_design_http_roundtrip_conflict_and_input_export(self):
+        payload = {"name": "HTTP 保存设计", "request": {"mode": "demo"}}
+        status, body, _ = self.request("/api/designs", payload)
+        self.assertEqual(status, 201)
+        record = json.loads(body)
+        self.assertIn("ATOM", record["request"]["protein_text"])
+        self.assertEqual(self.request(f"/api/designs/{record['id']}")[0], 200)
+        self.assertIn(
+            record["id"],
+            [entry["id"] for entry in json.loads(self.request("/api/designs")[1])],
+        )
+        self.assertEqual(
+            self.request(f"/api/designs/{record['id']}", payload, method="PUT")[0], 409
+        )
+        payload["revision"] = 1
+        self.assertEqual(
+            self.request(f"/api/designs/{record['id']}", payload, method="PUT")[0], 200
+        )
+        status, body, headers = self.request(f"/api/designs/{record['id']}/export")
+        self.assertEqual(status, 200)
+        self.assertIn("attachment", headers["Content-Disposition"])
+        self.assertEqual(json.loads(body)["revision"], 2)
+        self.assertEqual(self.request("/api/designs/not-an-id")[0], 404)
+
+    def test_real_structure_preparation_exports_and_comparison_api(self):
+        payload = {
+            "protein_text": (PACKAGE / "examples/3rfm.pdb").read_text(),
+            "keep_ligands": False,
+        }
+        status, body, _ = self.request("/api/structures/prepare", payload)
+        self.assertEqual(status, 200)
+        self.assertNotIn("HETATM", json.loads(body)["protein"])
+        self.assertEqual(
+            self.request("/api/structures/prepare", dict(payload, chains=["Z"]))[0], 422
+        )
+        selection = {"selection": [{"job_id": JOB, "index": 0}], "format": "sdf"}
+        status, body, _ = self.request("/api/library/export", selection)
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(Chem.MolFromMolBlock(body.decode().split("$$$$")[0]))
+        self.assertEqual(
+            self.request("/api/library/export", dict(selection, format="html"))[0], 422
+        )
+        self.assertEqual(self.request("/api/jobs/compare", {"jobs": [JOB]})[0], 200)
+        self.assertEqual(
+            self.request("/api/jobs/compare", {"jobs": ["../../private"]})[0], 422
+        )
+        self.assertEqual(self.request("/api/models/unknown/verify", {})[0], 422)
 
     def test_real_page_models_and_persistent_result_download(self):
         status, body, headers = self.request("/")
