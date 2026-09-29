@@ -73,27 +73,109 @@ test("ligand representations retain conventional element colors and distinct geo
   assert.ok(!ligandStyle("sticks", FIGURE_DEFAULTS).sphere);
 });
 
-import { presetOptions } from "../web/presets.js";
-test("simple presets produce bounded, task-specific settings", () => {
-  for (const task of ["generate", "inpaint", "optimize", "diversify"])
-    for (const level of ["quick", "standard", "explore"]) {
-      const options = presetOptions(task, level);
-      assert.ok(options.count <= 100);
-      assert.ok(options.steps <= 500);
-      if (task === "inpaint") {
-        assert.equal(options.relaxation, 0);
-        assert.equal(options.fragment_policy, "all");
-      }
-      if (task === "optimize") {
-        assert.ok(options.population * options.rounds <= 100);
-        assert.ok(options.survivors <= options.population);
-      }
-    }
-  assert.equal(presetOptions("generate", "quick").steps, 100);
-  assert.equal(presetOptions("generate", "standard").steps, 500);
-  assert.notEqual(
-    presetOptions("diversify", "quick").change_steps,
-    presetOptions("diversify", "explore").change_steps,
-  );
+import {
+  configureContract,
+  fieldActive,
+  projectOptions,
+  presetOptions,
+} from "../web/contract.js";
+test("capability projection excludes inactive options and retains enforced native constraints", () => {
+  configureContract({
+    schema: 1,
+    fields: {
+      count: { when: [{ task: ["generate", "inpaint"] }] },
+      atoms: { when: [{ task: ["generate"], size_mode: ["fixed"] }] },
+      steps: { when: [{ task: ["generate", "inpaint"] }] },
+      change_steps: { when: [{ task: ["optimize"] }] },
+      fixed_atoms: { when: [{ task: ["inpaint"] }] },
+    },
+    tasks: {
+      generate: {
+        presets: [{ id: "trial", options: { count: 7, steps: 80 } }],
+      },
+      optimize: {},
+      inpaint: { forced: { fragment_policy: "all", relaxation: 0 } },
+    },
+    models: [
+      {
+        id: "conditional",
+        installed: true,
+        strategy: "cond",
+        tasks: ["generate", "optimize", "inpaint"],
+      },
+      { id: "joint", strategy: "joint", tasks: ["generate"] },
+    ],
+    rules: [
+      { when: { task: ["inpaint"], trajectory: [true] }, set: { count: 1 } },
+    ],
+  });
+  assert.deepEqual(presetOptions("generate", "trial"), { count: 7, steps: 80 });
   assert.throws(() => presetOptions("generate", "missing"));
+  assert.equal(
+    fieldActive({ when: [{ strategy: ["joint"] }] }, { strategy: "cond" }),
+    false,
+  );
+  const result = projectOptions({
+    task: "optimize",
+    model: "conditional",
+    steps: 9999,
+    atoms: 1000,
+    count: 1000,
+    change_steps: 75,
+  });
+  assert.deepEqual(result, {
+    task: "optimize",
+    model: "conditional",
+    change_steps: 75,
+  });
+  const inpaint = projectOptions({
+    task: "inpaint",
+    model: "conditional",
+    count: 30,
+    steps: 500,
+    fixed_atoms: [1, 2],
+    trajectory: true,
+  });
+  assert.equal(inpaint.count, 1);
+  assert.equal(inpaint.fragment_policy, "all");
+  assert.equal(inpaint.relaxation, 0);
+  assert.throws(() => projectOptions({ task: "optimize", model: "joint" }));
+});
+
+import {
+  selectionGroup,
+  toggleGroup,
+  editorAtomMap,
+} from "../web/molecular-selection.js";
+test("whole-ring selection includes shared rings but not a separate ring", () => {
+  const rings = [
+    [0, 1, 2],
+    [2, 3, 4],
+    [7, 8, 9],
+  ];
+  assert.deepEqual(
+    selectionGroup(1, rings, "ring").sort((a, b) => a - b),
+    [0, 1, 2, 3, 4],
+  );
+  assert.deepEqual(selectionGroup(1, rings, "atom"), [1]);
+  assert.deepEqual(toggleGroup([0, 1, 2, 7], [0, 1, 2]), [7]);
+  assert.deepEqual(toggleGroup([0, 7], [0, 1, 2]), [0, 1, 2, 7]);
+});
+test("editor correspondence checks atom order and bond identity before synchronizing IDs", () => {
+  const mol =
+    "CO\n\n\n  2  1  0  0  0  0            999 V2000\n    0.0000    0.0000    0.0000 C   0  0  0  0\n    1.5000    0.0000    0.0000 O   0  0  0  0\n  1  2  1  0  0  0  0\nM  END\n";
+  const struct = {
+    atoms: new Map([
+      [5, { label: "C" }],
+      [9, { label: "O" }],
+    ]),
+    bonds: new Map([[0, { begin: 5, end: 9, type: 1 }]]),
+  };
+  assert.deepEqual(editorAtomMap(mol, struct), [5, 9]);
+  struct.bonds.get(0).type = 2;
+  assert.equal(editorAtomMap(mol, struct), null);
+  struct.bonds.get(0).type = 1;
+  struct.atoms.get(9).label = "N";
+  assert.equal(editorAtomMap(mol, struct), null);
+  assert.equal(editorAtomMap("invalid", struct), null);
 });

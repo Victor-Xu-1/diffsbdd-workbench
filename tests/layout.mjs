@@ -22,6 +22,7 @@ try {
     await page.goto(process.env.DIFFSBDD_TEST_URL || "http://127.0.0.1:7865", {
       waitUntil: "networkidle",
     });
+    await page.locator("#load-example").click();
     await page.waitForFunction(
       () => document.querySelector("#pocket-viewer").dataset.ready === "true",
     );
@@ -32,6 +33,15 @@ try {
       `Horizontal overflow at ${width}`,
     );
     await page.locator("#save-draft").focus();
+    // The explicit sample click activates pointer modality; verify real keyboard focus.
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page
+        .locator("#save-draft")
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
     assert.notEqual(
       await page
         .locator("#save-draft")

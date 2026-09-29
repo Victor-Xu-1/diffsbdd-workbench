@@ -1,7 +1,47 @@
-/* Operational controls retain the reference layout and collapse expert inputs. */
-body:not(.expert) .expert-only {
-  display: none !important;
+/* Contextual actions and optional controls follow the shared visual style. */
+.current-design {
+  color: var(--muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.empty-pocket {
+  min-height: 330px;
+  display: grid;
+  place-content: center;
+  padding: 30px;
+  color: var(--muted);
+  background: #f5f9ff;
+  border-radius: 8px;
+  text-align: center;
+}
+.model-controls {
+  display: grid;
+  grid-template-columns: auto minmax(200px, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+#prepare-open {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.confirmation.pending .confirm-icon,
+.action-bar:not(.is-ready) .footer-status > img {
+  display: none;
+}
+@media (max-width: 600px) {
+  .model-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .current-design {
+    display: none;
+  }
+}
+
 .generation-panel .panel-heading {
   flex-wrap: wrap;
 }

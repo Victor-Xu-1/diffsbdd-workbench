@@ -1,17 +1,52 @@
 import { addFigureLabel } from "./figure-labels.js";
 /** Shared publication figure conventions for both real molecular viewers. */
 export const FIGURE_DEFAULTS = Object.freeze({
-  proteinColor: "#8fbce0",
-  carbonColor: "#48a548",
-  surfaceOpacity: 0.15,
-  proteinOpacity: 1,
-  stickRadius: 0.16,
+  proteinColor: "#9c63df",
+  carbonColor: "#18ba26",
+  surfaceOpacity: 0.3,
+  proteinOpacity: 0.5,
+  stickRadius: 0.14,
   representation: "cartoon",
+  proteinScope: "full",
+  ligandRepresentation: "stick",
   background: "#ffffff",
   projection: "orthographic",
-  labels: false,
-  sidechains: false,
+  labels: true,
+  sidechains: true,
+  sidechainStyle: "line",
+  contextRadius: 5,
+  fog: true,
   surfaceType: "SES",
+  showSurface: false,
+});
+export const FIGURE_PRESETS = Object.freeze({
+  site: {
+    label: "结合位点",
+    settings: { ...FIGURE_DEFAULTS },
+    focus: "ligand",
+  },
+  surface: {
+    label: "口袋表面",
+    settings: {
+      ...FIGURE_DEFAULTS,
+      labels: false,
+      sidechains: false,
+      surfaceOpacity: 0.5,
+      proteinOpacity: 0.25,
+      showSurface: true,
+    },
+    focus: "ligand",
+  },
+  protein: {
+    label: "完整蛋白",
+    settings: {
+      ...FIGURE_DEFAULTS,
+      labels: false,
+      sidechains: false,
+      proteinOpacity: 0.8,
+    },
+    focus: "protein",
+  },
 });
 const ELEMENTS = {
   N: 0x315cc4,
@@ -43,7 +78,7 @@ export function proteinStyle(settings) {
   if (settings.representation === "line") return { line: { color, opacity } };
   if (settings.representation === "stick")
     return { stick: { color, opacity, radius: 0.1 } };
-  return { cartoon: { color, opacity, thickness: 0.25, arrows: true } };
+  return { cartoon: { color, opacity, thickness: 0.18, arrows: true } };
 }
 export function nearbyAtoms(model, points, radius) {
   const squared = radius * radius;
@@ -55,20 +90,49 @@ export function nearbyAtoms(model, points, radius) {
       ),
     );
 }
-export function residueContext(viewer, settings, points, modelId = 0) {
-  const near = nearbyAtoms(viewer.getModel(modelId), points, 4);
-  const ids = new Set(near.map((a) => `${a.chain}:${a.resi}`));
+export function residueContext(
+  viewer,
+  settings,
+  points,
+  modelId = 0,
+  allowedResidues = null,
+) {
+  const near = nearbyAtoms(
+    viewer.getModel(modelId),
+    points,
+    settings.contextRadius,
+  );
+  const contextual = allowedResidues
+    ? near.filter((atom) => allowedResidues.has(`${atom.chain}:${atom.resi}`))
+    : near;
+  const ids = new Set(contextual.map((a) => `${a.chain}:${a.resi}`));
   const selection = {
     model: modelId,
     predicate: (a) => ids.has(`${a.chain}:${a.resi}`),
   };
+  // Thin cylinders remain legible in high-resolution export on GPUs with 1px GL lines.
   if (settings.sidechains)
-    viewer.addStyle(selection, {
-      stick: { radius: 0.09, colorfunc: atomColor(settings.proteinColor) },
-    });
+    viewer.addStyle(
+      selection,
+      settings.sidechainStyle === "line"
+        ? {
+            stick: {
+              radius: 0.025,
+              colorfunc: atomColor("#777777"),
+              opacity: 1,
+            },
+          }
+        : {
+            stick: {
+              radius: 0.075,
+              colorfunc: atomColor("#9a9a9a"),
+              opacity: 0.8,
+            },
+          },
+    );
   if (settings.labels) {
     const candidates = [];
-    for (const atom of near) {
+    for (const atom of contextual) {
       if (
         candidates.some((a) => a.chain === atom.chain && a.resi === atom.resi)
       )
@@ -84,21 +148,28 @@ export function residueContext(viewer, settings, points, modelId = 0) {
           ...points.map((p) => Math.hypot(p.x - b.x, p.y - b.y, p.z - b.z)),
         ),
     );
-    for (const atom of candidates.slice(0, 10))
+    for (const atom of candidates.slice(0, 10)) {
+      const anchor =
+        viewer.getModel(modelId).selectedAtoms({
+          chain: atom.chain,
+          resi: atom.resi,
+          atom: "CA",
+        })[0] || atom;
       addFigureLabel(viewer, `${atom.resn} ${atom.chain}:${atom.resi}`, {
-        position: atom,
+        position: anchor,
         font: "Arial",
-        fontSize: 14,
-        fontColor: 0x263446,
+        fontSize: 12,
+        fontColor: 0x727272,
         backgroundOpacity: 0,
         inFront: false,
       });
+    }
   }
 }
 export function applyCamera(viewer, settings) {
   viewer.setBackgroundColor(settings.background, 1);
   viewer.setProjection(settings.projection);
-  viewer.enableFog(false);
+  viewer.enableFog(settings.fog);
 }
 
 export function validateFigureSettings(input) {
@@ -109,11 +180,15 @@ export function validateFigureSettings(input) {
     surfaceOpacity: [0, 1],
     proteinOpacity: [0.1, 1],
     stickRadius: [0.08, 0.3],
+    contextRadius: [3, 8],
   };
   const choices = {
     representation: ["cartoon", "stick", "line"],
+    proteinScope: ["full", "pocket", "none"],
+    ligandRepresentation: ["stick", "sticks", "sphere", "line"],
     projection: ["orthographic", "perspective"],
     surfaceType: ["SES", "VDW", "SAS"],
+    sidechainStyle: ["line", "stick"],
   };
   for (const [key, value] of Object.entries(input)) {
     if (!(key in FIGURE_DEFAULTS)) throw new Error("视图设置包含未知字段。");
@@ -131,7 +206,10 @@ export function validateFigureSettings(input) {
       !/^#[0-9a-f]{6}$/i.test(value)
     )
       throw new Error("颜色必须为六位十六进制值。");
-    if (["labels", "sidechains"].includes(key) && typeof value !== "boolean")
+    if (
+      ["labels", "sidechains", "fog", "showSurface"].includes(key) &&
+      typeof value !== "boolean"
+    )
       throw new Error("标注参数必须为布尔值。");
     result[key] = value;
   }

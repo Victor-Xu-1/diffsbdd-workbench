@@ -37,6 +37,7 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
   await page.goto(base, { waitUntil: "networkidle" });
+  await page.locator("#load-example").click();
   await page.waitForFunction(
     () => document.querySelector("#model").options.length === 8,
   );
@@ -69,6 +70,9 @@ try {
   await page.locator('[data-figure="pocket"]').click();
   await page.locator("#figure-sidechains").check();
   await page.locator("#figure-labels").check();
+  await page.locator("#figure-proteinScope").selectOption("pocket");
+  await page.locator("#figure-contextRadius").fill("4.5");
+  await page.locator("#figure-showSurface").check();
   await page.locator("#figure-apply").click();
   await page.waitForFunction(() =>
     document.querySelector("#figure-message").textContent.includes("已应用"),
@@ -79,6 +83,11 @@ try {
   await page.locator("#figure-recipe").click();
   const recipePath = path.join(output, "view.json");
   await (await recipeDownload).saveAs(recipePath);
+  const recipe = JSON.parse(await readFile(recipePath, "utf8"));
+  assert.equal(recipe.settings.proteinScope, "pocket");
+  assert.equal(recipe.settings.ligandRepresentation, "stick");
+  assert.equal(recipe.settings.contextRadius, 4.5);
+  assert.equal(recipe.settings.showSurface, true);
   await page.locator("#figure-import-file").setInputFiles(recipePath);
   await page.waitForFunction(() =>
     document.querySelector("#figure-message").textContent.includes("已恢复"),
@@ -93,6 +102,7 @@ try {
   assert.equal(png.readUInt32BE(16), 2400);
   assert.ok(png.readUInt32BE(20) > 500);
   await page.locator("#figure-dialog .dialog-close").click();
+  await page.locator('[data-figure-preset="pocket"]').selectOption("site");
   check(
     "real surface rendering, residue labels, view recipe roundtrip and 2400-pixel PNG export",
   );
@@ -107,7 +117,8 @@ try {
   if (!uiOnly) {
     await page.locator("#count").fill("2");
     await page.locator("#size_mode").selectOption("fixed");
-    await page.locator("#expert-mode").click();
+    if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+      await page.locator("#advanced-settings > summary").click();
     await page.locator("#atoms").fill("24");
     const sent = page.waitForResponse(
       (r) => r.url() === `${base}/api/jobs` && r.request().method() === "POST",
@@ -134,6 +145,8 @@ try {
   const editor = page.frames().find((f) => f.url().includes("/editor/"));
   const smiles = await editor.evaluate(() => window.ketcher.getSmiles());
   assert.match(smiles, /F/);
+  assert.equal(await page.locator("#fixed-atoms").inputValue(), "");
+  assert.match(await page.locator("#selection-sync").innerText(), /结构已修改/);
   const note = `Browser test: graphical O→F edit ${Date.now()}`;
   await page.locator("#feedback").fill(note);
   await page.locator("#rating").selectOption("4");
@@ -182,13 +195,12 @@ try {
   await page.locator("#history").selectOption(parent);
   await page.getByText(note, { exact: false }).first().waitFor();
   check("feedback survives page reload");
-  await page.locator("#surface").check();
-  await page.locator("#protein-view").selectOption("full");
-  await page.locator("#ligand-view").selectOption("sphere");
-  await page.locator("#surface").uncheck();
-  await page.locator("#protein-view").selectOption("pocket");
-  await page.locator("#ligand-view").selectOption("stick");
+  await page.locator('[data-figure-preset="result"]').selectOption("surface");
+  await display("full", "sphere");
+  await page.locator('[data-figure-preset="result"]').selectOption("site");
+  await display("pocket", "stick");
   await page.locator("#click-mode").selectOption("select");
+  await page.locator("#result-pick").selectOption("atom");
   await page.locator("#viewer").scrollIntoViewIfNeeded();
   const box = await page.locator("#viewer canvas").first().boundingBox(),
     hits = [];
@@ -206,6 +218,26 @@ try {
     2,
     "Could not select two actual atoms through the 3D canvas",
   );
+  const mappedSelection = await page.evaluate(
+    () =>
+      document.getElementById("editor").contentWindow.ketcher.editor.selection()
+        .atoms,
+  );
+  assert.equal(
+    mappedSelection.length,
+    2,
+    "3D atom selection must reach the actual Ketcher editor",
+  );
+  await page.evaluate(() =>
+    document
+      .getElementById("editor")
+      .contentWindow.ketcher.editor.selection({ atoms: [0, 1, 2] }),
+  );
+  assert.equal(
+    await page.locator("#fixed-atoms").inputValue(),
+    "1,2,3",
+    "Native editor selection must return to the shared 3D atom mask",
+  );
   await page.locator("#click-mode").selectOption("measure");
   for (const point of hits) await page.mouse.click(point.x, point.y);
   assert.match(await page.locator("#viewer-note").innerText(), /几何距离/);
@@ -221,7 +253,8 @@ try {
           "口袋已确认",
     );
     await page.locator('[data-task="inpaint"]').click();
-    await page.locator("#expert-mode").click();
+    if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+      await page.locator("#advanced-settings > summary").click();
     await page.locator("#size_mode").selectOption("fixed");
     const data = await (
       await context.request.get(`${base}/api/jobs/${parent}`)
@@ -291,7 +324,8 @@ try {
   );
   await page.setViewportSize({ width: 1536, height: 1024 });
   await page.locator("#load-example").click();
-  await page.locator("#guided-mode").click();
+  if (await page.locator("#advanced-settings").evaluate((el) => el.open))
+    await page.locator("#advanced-settings > summary").click();
   await page.waitForFunction(
     () =>
       document.querySelector("#pocket-viewer").dataset.ready === "true" &&
@@ -339,4 +373,19 @@ async function waitJob(context, id) {
 function check(message) {
   evidence.checks.push(message);
   console.log(`Passed: ${message}`);
+}
+
+async function display(scope, ligand) {
+  await page.locator('[data-figure="result"]').click();
+  await page.locator("#figure-proteinScope").selectOption(scope);
+  await page.locator("#figure-ligandRepresentation").selectOption(ligand);
+  await page.locator("#figure-apply").click();
+  await page.waitForFunction(() =>
+    document.querySelector("#figure-message").textContent.includes("已应用"),
+  );
+  await page.locator("#figure-dialog .dialog-close").click();
+  assert.equal(
+    await page.locator('[data-figure-preset="result"]').inputValue(),
+    "custom",
+  );
 }

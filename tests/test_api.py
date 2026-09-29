@@ -20,6 +20,21 @@ JOB = "a" * 32
 
 
 class ApiTests(unittest.TestCase):
+    def test_capabilities_exposes_real_option_limits_and_registered_models(self):
+        from local_diffsbdd.options import DesignOptions
+
+        status, body, _ = self.request("/api/capabilities")
+        self.assertEqual(status, 200)
+        contract = json.loads(body)
+        self.assertEqual(
+            contract["fields"]["count"]["maximum"],
+            DesignOptions.model_json_schema()["properties"]["count"]["maximum"],
+        )
+        self.assertTrue(contract["models"])
+        self.assertTrue(
+            all("label" in model and "tasks" in model for model in contract["models"])
+        )
+
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory()
@@ -250,6 +265,10 @@ class ApiTests(unittest.TestCase):
         status, body, _ = self.request("/api/poses/inspect", payload)
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["atoms"], self.molecule.GetNumAtoms())
+        self.assertEqual(
+            json.loads(body)["rings"],
+            [list(ring) for ring in self.molecule.GetRingInfo().AtomRings()],
+        )
         self.assertEqual(
             self.request("/api/poses/inspect", {"sdf": "invalid structure document"})[
                 0

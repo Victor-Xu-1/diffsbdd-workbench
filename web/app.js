@@ -1,16 +1,10 @@
+import { configureContract, getContract } from "./contract.js";
 import { setupHelp } from "./help.js";
 import { setupDesigns, refreshDesigns } from "./designs-ui.js";
 import { setupPreparation } from "./preparation-ui.js";
 import { setupCollections } from "./collections-ui.js";
 import { setupFigures } from "./figure-panel.js";
-import {
-  setupShell,
-  setView,
-  setStage,
-  notice,
-  syncModelSelectors,
-  renderModels,
-} from "./shell.js";
+import { setupShell, setView, notice, applyPreset } from "./shell.js";
 import {
   setupPocketUI,
   readPocketInputs,
@@ -21,6 +15,7 @@ import {
   loadProtein,
   currentProtein,
   hasInitialPose,
+  clearInputs,
 } from "./pocket-ui.js";
 import { exportEditor } from "./editor-bridge.js";
 import {
@@ -31,7 +26,12 @@ import {
   syncControls,
 } from "./controls.js";
 import { api, link, labels, friendlyError } from "./api.js";
-import { renderStatus, renderMolecules, renderDetail } from "./results-ui.js";
+import {
+  renderStatus,
+  renderMolecules,
+  renderDetail,
+  renderEditedDetail,
+} from "./results-ui.js";
 import { showMolecule, showEdited, setupPreview } from "./preview.js";
 const state = {
   job: null,
@@ -57,7 +57,13 @@ function buttonState() {
   const needsSource = $("task").value !== "generate";
   const sourceReady = !needsSource || hasInitialPose();
   const fragmentReady =
-    $("task").value !== "inpaint" || Boolean($("fixed-atoms").value.trim());
+    $("task").value !== "inpaint" ||
+    (Boolean($("fixed-atoms").value.trim()) &&
+      $("fixed-atoms").checkValidity());
+  $("action-bar").classList.toggle(
+    "is-ready",
+    state.pocketReady && sourceReady && fragmentReady,
+  );
   $("ready-label").textContent = !state.pocketReady
     ? "请先确认口袋"
     : !sourceReady
@@ -69,12 +75,18 @@ function buttonState() {
     state.busy ||
     state.loadingSource ||
     !state.ready ||
+    !getContract().models.find((model) => model.id === $("model").value)
+      ?.installed ||
     !state.pocketReady ||
     !sourceReady ||
     !fragmentReady;
+  $("save-draft").disabled =
+    state.loadingSource || !state.pocketReady || !sourceReady || !fragmentReady;
   for (const id of ["save-edit", "optimize", "use-original"])
     $(id).disabled =
       state.busy || state.loadingSource || state.saving || state.selected < 0;
+  for (const button of document.querySelectorAll(".edit-row button"))
+    button.disabled = state.loadingSource || state.saving;
 }
 async function history(selectLatest = false) {
   const jobs = await api("/api/jobs");
@@ -143,7 +155,6 @@ async function selectJob(id) {
   state.loadingSource = true;
   buttonState();
   setView("results");
-  setStage(4);
   clearTimeout(state.timer);
   error();
   state.selected = -1;
@@ -194,7 +205,11 @@ async function selectMolecule(index) {
     if (token !== state.loadRevision || state.job.id !== job.id) return;
     updateSource();
   } catch (e) {
-    if (token === state.loadRevision) error(e.message);
+    if (token === state.loadRevision) {
+      state.selected = -1;
+      state.source = null;
+      error(e.message);
+    }
   } finally {
     if (token === state.loadRevision) {
       state.loadingSource = false;
@@ -217,28 +232,53 @@ function renderEdits() {
     text.textContent = `分子 ${edit.parent_index + 1} · 评价 ${edit.rating || "未评分"} · ${edit.notes || "无备注"} · 共同骨架偏移 ${edit.alignment_rmsd} Å`;
     const use = document.createElement("button");
     use.textContent = "预览并作为下一轮起点";
-    use.addEventListener("click", async () => {
-      try {
-        state.selected = edit.parent_index;
-        state.source = {
-          parent_job: state.job.id,
-          molecule_index: edit.parent_index,
-          edit_id: edit.id,
-        };
-        await showEdited(state.job, edit);
-        $("mode").value = "result";
-        updateSource();
-        syncControls();
-      } catch (e) {
-        error(e.message);
-      }
-    });
+    use.disabled = state.loadingSource || state.saving;
+    use.addEventListener("click", () => selectEdit(edit));
     row.append(
       text,
       link("编辑版 SDF", `/api/jobs/${state.job.id}/edits/${edit.id}.sdf`),
       use,
     );
     $("edit-history").append(row);
+  }
+}
+async function selectEdit(edit) {
+  if (state.saving || state.loadingSource) return;
+  const job = state.job,
+    token = ++state.loadRevision;
+  state.loadingSource = true;
+  buttonState();
+  error();
+  try {
+    if (
+      !(await showEdited(job, edit)) ||
+      token !== state.loadRevision ||
+      state.job.id !== job.id
+    )
+      return;
+    state.selected = edit.parent_index;
+    state.source = {
+      parent_job: job.id,
+      molecule_index: edit.parent_index,
+      edit_id: edit.id,
+    };
+    $("selected-label").textContent =
+      `编辑版 · 来源分子 ${edit.parent_index + 1}`;
+    $("edit-message").textContent =
+      "已载入保存的编辑版，可以继续编辑或用于下一轮设计。";
+    $("feedback").value = edit.notes || "";
+    $("rating").value = String(edit.rating || 0);
+    renderEditedDetail(job, edit);
+    $("mode").value = "result";
+    updateSource();
+    syncControls();
+  } catch (e) {
+    if (token === state.loadRevision) error(e.message);
+  } finally {
+    if (token === state.loadRevision) {
+      state.loadingSource = false;
+      buttonState();
+    }
   }
 }
 async function payload() {
@@ -291,8 +331,9 @@ async function saveEdit(next) {
   $("save-edit").disabled = true;
   $("optimize").disabled = true;
   $("edit-message").textContent = "正在校验结构并对齐三维起始构象…";
+  let saved = null;
   try {
-    const saved = await api(`/api/jobs/${state.job.id}/edits`, {
+    saved = await api(`/api/jobs/${state.job.id}/edits`, {
       method: "POST",
       body: JSON.stringify({
         index: state.selected,
@@ -310,20 +351,24 @@ async function saveEdit(next) {
     };
     state.job = await api(`/api/jobs/${state.job.id}`);
     renderEdits();
+    await showEdited(state.job, saved);
+    renderEditedDetail(state.job, saved);
     if (next) {
-      await showEdited(state.job, saved);
       $("mode").value = "result";
-      $("task").value = "optimize";
+      $("task").value = $("continue-task").value;
       updateSource();
       syncControls();
       $("task").dispatchEvent(new Event("change"));
+      applyPreset();
       setView("design");
       await inspectPocket();
       $("generate-form").scrollIntoView({ behavior: "smooth", block: "start" });
     }
   } catch (e) {
     error(e.message);
-    $("edit-message").textContent = "未保存，请按提示修改结构后重试。";
+    $("edit-message").textContent = saved
+      ? "编辑版已保存，但后续预览未完成。请在编辑记录中重新打开。"
+      : "未保存，请按提示修改结构后重试。";
   } finally {
     state.saving = false;
     buttonState();
@@ -334,6 +379,9 @@ $("optimize").addEventListener("click", () => saveEdit(true));
 $("use-original").addEventListener("click", async () => {
   await selectMolecule(state.selected);
   $("mode").value = "result";
+  $("task").value = $("continue-task").value;
+  $("task").dispatchEvent(new Event("change"));
+  applyPreset();
   syncControls();
   setView("design");
   await inspectPocket();
@@ -341,117 +389,109 @@ $("use-original").addEventListener("click", async () => {
 $("history").addEventListener("change", () =>
   selectJob($("history").value).catch((e) => error(e.message)),
 );
-$("reuse").addEventListener("click", async () => {
-  if (!state.job) return;
-  restoreOptions(state.job.report?.settings || state.job.settings || {});
-  $("mode").value = "result";
-  updateSource();
-  syncControls();
-  $("task").dispatchEvent(new Event("change"));
-  syncModelSelectors();
-  setView("design");
-  await inspectPocket();
-  notice("已复用计算设置，请确认输入和保留原子编号，再开始设计。");
-});
 for (const id of ["sort", "filter"])
   $(id).addEventListener("change", () => {
     if (state.job) renderMolecules(state.job, state.selected, selectMolecule);
   });
-setupFigures();
-mountControls();
-setupPreview();
-setupPocketUI({
-  getSource: () => state.source,
-  onError: error,
-  onReady: (ready) => {
-    state.pocketReady = ready;
-    if (ready && !$("design-view").hidden) setStage(2);
-    $("ready-label").textContent = ready
-      ? "结构与口袋已就绪"
-      : "请确认蛋白与口袋";
-    buttonState();
-  },
-});
-setupShell({
-  loadExample,
-  onError: error,
-  openResults: async () => {
-    const requested = state.jobRevision;
-    await history();
-    if (!state.job && requested === state.jobRevision) {
-      const jobs = await api("/api/jobs");
-      const latest = jobs.find((job) => job.report?.valid > 0) || jobs[0];
-      if (latest && requested === state.jobRevision) await selectJob(latest.id);
-    }
-  },
-});
-
-$("fixed-atoms").addEventListener("change", buttonState);
-setupHelp();
-setupDesigns({
-  payload,
-  onError: error,
-  notice,
-  restore: async (request) => {
-    state.source = null;
-    restoreOptions(request.options);
-    setView("design");
-    await restorePocketInputs(request);
-    restoreOptions(request.options);
-    $("fixed-atoms").dispatchEvent(new Event("change"));
-    $("task").dispatchEvent(new Event("change"));
-    syncModelSelectors();
-  },
-  newDesign: async () => {
-    state.source = null;
-    $("task").value = "generate";
-    $("task").dispatchEvent(new Event("change"));
-    setView("design");
-    await loadExample();
-  },
-});
-setupPreparation({
-  onError: error,
-  readInputs: async () => ({ protein_text: await currentProtein() }),
-  useProtein: async (text, name) => {
-    state.source = null;
-    setView("design");
-    await loadProtein(text, name);
-  },
-});
-setupCollections({
-  onError: error,
-  openResult: async (id, index) => {
-    await selectJob(id);
-    await selectMolecule(index);
-  },
-});
-
 try {
+  const capabilities = await api("/api/capabilities");
+  configureContract(capabilities);
+  setupFigures();
+  mountControls();
+  setupPreview();
+  setupPocketUI({
+    getSource: () => state.source,
+    onError: error,
+    onReady: (ready) => {
+      state.pocketReady = ready;
+      $("ready-label").textContent = ready
+        ? "结构与口袋已就绪"
+        : "请确认蛋白与口袋";
+      buttonState();
+    },
+  });
+  setupShell({
+    loadExample,
+    onError: error,
+    openResults: async () => {
+      const requested = state.jobRevision;
+      await history();
+      if (!state.job && requested === state.jobRevision) {
+        const jobs = await api("/api/jobs");
+        const latest = jobs.find((job) => job.report?.valid > 0) || jobs[0];
+        if (latest && requested === state.jobRevision)
+          await selectJob(latest.id);
+      }
+    },
+  });
+
+  $("fixed-atoms").addEventListener("change", buttonState);
+  $("model").addEventListener("change", buttonState);
+  setupHelp();
+  setupDesigns({
+    payload,
+    onError: error,
+    notice,
+    restore: async (request) => {
+      state.source = null;
+      restoreOptions(request.options);
+      setView("design");
+      if (!(await restorePocketInputs(request)))
+        throw new Error("未能恢复设计口袋，请检查服务后重新打开该设计。");
+      restoreOptions(request.options);
+      $("fixed-atoms").dispatchEvent(new Event("change"));
+      $("task").dispatchEvent(new Event("change"));
+    },
+    newDesign: async () => {
+      state.source = null;
+      const config = getContract();
+      restoreOptions({
+        ...Object.fromEntries(
+          Object.entries(config.fields).map(([name, field]) => [
+            name,
+            field.default ?? [],
+          ]),
+        ),
+        task: config.default_task,
+        model: config.default_model,
+      });
+      $("task").dispatchEvent(new Event("change"));
+      applyPreset();
+      setView("design");
+      clearInputs();
+    },
+  });
+  setupPreparation({
+    onError: error,
+    readInputs: async () => ({ protein_text: await currentProtein() }),
+    useProtein: async (text, name) => {
+      state.source = null;
+      setView("design");
+      await loadProtein(text, name);
+    },
+  });
+  setupCollections({
+    onError: error,
+    openResult: async (id, index) => {
+      await selectJob(id);
+      await selectMolecule(index);
+    },
+  });
+
   const health = await api("/api/health");
   state.ready = health.ready;
   $("health").textContent = health.ready
     ? "本机显卡已就绪 · 数据保存在本地"
     : "计算环境未就绪，请运行环境检查";
-  for (const model of health.models) {
-    const option = new Option(
-      `${model.dataset === "moad" ? "Binding MOAD" : "CrossDocked"} · ${model.representation === "ca" ? "Cα" : "全原子"} · ${model.strategy === "cond" ? "条件生成" : "联合分布"}${model.installed ? "" : "（未安装）"}`,
-      model.id,
-    );
-    option.dataset.installed = String(model.installed);
-    $("model").add(option);
-  }
-  $("model").value = "crossdocked_fullatom_cond";
-  syncControls();
-  renderModels(health.models);
-  syncModelSelectors();
   await history(false);
   await refreshDesigns();
-  await loadExample();
+  clearInputs();
   buttonState();
   schedule();
 } catch (e) {
   state.ready = false;
-  buttonState();
+  $("generate").disabled = true;
+  $("save-draft").disabled = true;
+  $("health").textContent = "工作台初始化失败，请刷新重试。";
   error(e.message);
 }

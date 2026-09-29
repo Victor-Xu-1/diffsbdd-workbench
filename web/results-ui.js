@@ -1,4 +1,5 @@
-import { $, schema } from "./controls.js";
+import { $ } from "./controls.js";
+import { getContract, fieldActive } from "./contract.js";
 import { friendlyError, link, labels } from "./api.js";
 
 export function orderedMolecules(molecules, sort = "original", filter = "all") {
@@ -90,6 +91,22 @@ export function renderDetail(job, index) {
   pose.download = `molecule_${index + 1}.mol`;
   $("molecule-detail").append(table, smiles, pose);
 }
+export function renderEditedDetail(job, edit) {
+  const title = document.createElement("strong");
+  title.textContent = `编辑版 · 来源分子 ${edit.parent_index + 1}`;
+  const description = document.createElement("p");
+  description.textContent = `类药性 QED ${edit.qed} · 共同骨架偏移 ${edit.alignment_rmsd} Å。当前三维图与二维编辑器显示此编辑版；原始候选保留在下方。`;
+  const smiles = document.createElement("p");
+  smiles.className = "smiles";
+  smiles.textContent = `SMILES：${edit.smiles}`;
+  $("molecule-detail").replaceChildren(
+    title,
+    description,
+    smiles,
+    link("下载当前编辑版 SDF", `/api/jobs/${job.id}/edits/${edit.id}.sdf`),
+  );
+  $("selected-label").textContent = `分子 ${edit.parent_index + 1} · 编辑版`;
+}
 export function renderStatus(job, error) {
   const report = job.report || {},
     running = job.status === "running",
@@ -128,15 +145,36 @@ export function renderStatus(job, error) {
     line.textContent = report.bond_reconstruction;
     $("run-settings").append(line);
   }
+  const contract = getContract(),
+    model = contract.models.find((model) => model.id === settings.model);
+  const context = {
+    ...settings,
+    task: settings.task || job.task,
+    strategy: model?.strategy,
+  };
   const entries = [
-    ["model", "模型"],
-    ...schema.map(([id, title]) => [id, title]),
+    ["model", { label: "模型" }],
+    ...Object.entries(contract.fields).filter(([, field]) =>
+      fieldActive(field, context),
+    ),
   ];
-  for (const [key, title] of entries)
+  for (const [key, field] of entries)
     if (settings[key] !== undefined) {
       const line = document.createElement("span");
       line.className = "setting";
-      line.textContent = `${title}：${settings[key]}`;
+      const raw = settings[key];
+      const value =
+        key === "model"
+          ? model?.label || raw
+          : (field.choices?.find((choice) => choice.value === raw)?.label ??
+            (Array.isArray(raw)
+              ? raw.map((index) => index + 1).join(", ")
+              : typeof raw === "boolean"
+                ? raw
+                  ? "开启"
+                  : "关闭"
+                : raw));
+      line.textContent = `${field.label}：${value}`;
       $("run-settings").append(line);
     }
   $("rejections").replaceChildren();

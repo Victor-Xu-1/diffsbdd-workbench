@@ -31,12 +31,7 @@
   filter: invert(28%) sepia(98%) saturate(2604%) hue-rotate(213deg)
     brightness(103%);
 }
-#project {
-  width: 165px;
-  height: 35px;
-  min-height: 35px;
-  color: #354d75;
-}
+
 .header-actions {
   margin-left: auto;
   display: flex;
@@ -47,12 +42,7 @@
   border-left: 1px solid #edf1f7;
   border-radius: 0;
 }
-.avatar {
-  width: 30px;
-  height: 30px;
-  background: #e8eef8;
-  border-radius: 50%;
-}
+
 .sidebar {
   position: fixed;
   top: var(--header);
@@ -94,35 +84,12 @@
 .nav-item.active .icon {
   filter: invert(26%) sepia(83%) saturate(4011%) hue-rotate(215deg);
 }
-.nav-hint {
-  font-size: 12px;
-  color: #7c8eac;
-  margin-left: auto;
-}
-.tag {
-  font-size: 12px;
-  color: var(--blue);
-  background: #e7efff;
-  padding: 2px 8px;
-  border-radius: 5px;
-}
 .sidebar hr {
   border: 0;
   border-top: 1px solid #e6edf7;
   margin: 28px 13px;
 }
-.sidebar-bottom {
-  position: absolute;
-  bottom: 74px;
-  left: 7px;
-  width: calc(100% - 14px);
-  border-top: 1px solid #e6edf7;
-  border-radius: 0;
-  padding-top: 21px;
-}
-.sidebar-bottom .tiny-icon {
-  margin-left: auto;
-}
+
 .main-content {
   margin-left: var(--sidebar);
   padding: 16px 20px 86px;
@@ -165,89 +132,7 @@
   color: white;
   box-shadow: 0 1px 3px #1a5fe329;
 }
-.mode-switch {
-  margin-top: 4px;
-}
-.mode-switch button {
-  min-width: 104px;
-}
-.stepper {
-  height: 71px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 11px 50px 0 95px;
-  gap: 13px;
-}
-.step {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  text-align: left;
-}
-.step:hover {
-  background: transparent;
-  border: 0;
-}
-.step-number {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid #bdcce3;
-  color: #61789e;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-  background: #f7faff;
-}
-.step-number img {
-  width: 22px;
-  height: 22px;
-  filter: brightness(0) invert(1);
-}
-.step strong {
-  font-size: 16px;
-  font-weight: 550;
-  white-space: nowrap;
-}
-.step small {
-  display: block;
-  font-size: 13px;
-  color: #778eaf;
-  margin-top: 0;
-}
-.step.complete strong {
-  color: #008748;
-}
-.step.complete .step-number {
-  color: #fff;
-  background: #049956;
-  border-color: #049956;
-}
-.step.active strong {
-  color: var(--blue);
-}
-.step.active .step-number {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #fff;
-}
-.step-line {
-  height: 1px;
-  background: #c6d5eb;
-  flex: 1;
-  margin-top: 15px;
-  min-width: 28px;
-  max-width: 150px;
-}
-.step-line.done {
-  background: #5c8eff;
-}
+
 .page-heading h1 {
   line-height: 1.15;
 }

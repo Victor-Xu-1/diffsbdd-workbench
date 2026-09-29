@@ -1,19 +1,19 @@
 # Design QA — passed
 
-Reviewed the supplied 1536 × 1024 reference and the running implementation at the same viewport on 2026-09-29. Rechecked desktop and narrow-screen captures for the 0.2 operational-page changes. The reference image is not redistributed.
+Reviewed the running implementation on 2026-09-29. Version 0.3 follows the user's clarified direction: use the reference for visual style, not a one-to-one module or geometry copy. The reference image is not redistributed.
 
-## Reference alignment
+## Visual style and usable workflow
 
 | Surface | Result |
 |---|---|
-| Layout | 52 px header, 246 px navigation, two input/preview columns starting at y=220, 438 px input cards, generation section starting at y=668, fixed bottom action bar. Desktop grid and card edges follow the reference. |
+| Layout | Retains the restrained blue/white palette, sidebar, cards and input/preview relationship. Removed the decorative stepper, duplicate mode switches and collapsed-card controls. Input height follows content; no fixed y-position target. |
 | Typography | Chinese UI font preference, navy headings, restrained blue secondary text, consistent input sizing and concise medicinal-chemistry labels. |
 | Color and shape | Pale blue background, white cards, fine blue-gray borders, blue primary/selected states, green confirmed states, consistent corner radii. |
 | Icons | A single licensed Tabler icon family; decorative icons have empty alt text and icon-only actions have accessible names. No custom illustration substitutes. |
 | Scientific imagery | Actual PDB/SDF geometry rendered by 3Dmol, not a pasted or generated protein illustration. The public example is A:330 with 36 computed pocket residues; those facts deliberately differ from the reference's illustrative text and geometry. |
-| Ketcher | Official standalone editor, one adapter module, real molecule import/export and chemical edit workflow verified. Native chemical tools are retained. |
-| Figures | Protein cartoon/stick/line; ligand ball-and-stick/stick/space-fill/line; SES/VDW/SAS; custom colors and transparency; orthographic/perspective; nearby residues; high-resolution PNG and saved camera recipes. Shared style module for input and result views. |
-| States | Loading pocket disables generation; verified input enables it only when runtime is available. Empty library, validation failures, running/cancelled/completed results and persisted edit feedback are explicit. |
+| Ketcher | Official standalone editor, one adapter module, real molecule import/export and chemical edit workflow verified. Wide screens place the editor beside the 3D view. Native selection events and verified atom/bond correspondence synchronize 2D/3D selections; chemical changes invalidate the map until the saved aligned pose is reloaded. |
+| Figures | White background, purple protein cartoon, green ligand ball-and-stick, gray neighboring residue bonds and labels follow the molecular reference's conventions. Three choices (binding site, pocket surface, whole protein) and one detailed dialog replace competing style controls. Protein scope, ligand representation, context radius, depth fading, colors, surfaces and camera share one exportable settings model. Real high-resolution PNG and view recipes remain available. No inferred interaction lines are invented. |
+| States | Initial input is empty and generation is disabled. Reading a real file or explicitly loading the example supplies file/ligand/residue state. API configuration failure shows an error without false read-success indicators. Loaded input, empty library, validation failure and actual job states are explicit. |
 | Keyboard | Visible focus styles, labelled controls, semantic dialogs/buttons, keyboard-accessible navigation. |
 | Responsive layouts | Actual Chrome at 1536×1024, 1024×900, 768×1024 and 390×844. No horizontal page overflow. Narrow-screen navigation works. Mobile preview toolbar wraps to a separate row; its heading and canvas no longer overlap the next card. Desktop is recommended for detailed molecular editing. |
 
@@ -24,9 +24,13 @@ Reviewed the supplied 1536 × 1024 reference and the running implementation at t
 - Corrected stale source selection/readiness and separated asynchronous editor loading from generation readiness.
 - Replaced missing icon references, corrected surface worker CSP and fixed a real early-response connection-reset failure at the API boundary.
 - Kept true calculated residue counts and replaced the apparent account menu with a static local-runtime indicator. The default is ten sequential candidates; quick trial offers three. No illustrative result counts are copied from the reference.
-- Removed selectivity, training and paper-benchmark navigation. Saved designs, actual task comparison and PDB preparation now have working persistence or downloadable outputs.
-- Added choice-based task presets and parameter explanations on hover, focus and tap, including Escape/outside-click dismissal. The guided view hides model internals; advanced controls remain available.
+- Removed selectivity, training and paper-benchmark navigation. Saved designs and actual task comparison retain their distinct functions. PDB preparation is a contextual dialog over the current protein, not a separate upload/page.
+- Consolidated model selection to one control; automatic inference-time checksum checks remain. Removed the standalone model page, redundant manual verification control, top saved-design dropdown, duplicate help and settings-reuse entry.
+- Added choice-based task presets and parameter explanations on hover, focus and tap, including Escape/outside-click dismissal. All fine parameters now have one optional advanced section, filtered by actual task applicability.
+- Tasks, model labels, presets and numerical bounds come from the backend capability contract. No example filename, readiness checkmark, residue count or result statistic is fabricated during startup.
 - Added direct protein-residue and ligand-ring/atom selection. Ring/scaffold indices come from RDKit; retained fragments have visible selection state.
+- Kept residue selection highlighted after pocket confirmation. Both input and result views use the same ring-selection rules and hover identification. Historical edits reload their actual parent for comparison, and successful persistence is reported separately from a subsequent preview failure.
 - Fixed delayed history responses overwriting a newer molecule selection, and prevented outdated PDB preparation from becoming usable after an option changes.
+- Verified focus using actual Tab/Shift+Tab keyboard actions after clicking the example loader. Restored the example loader's icon at mobile widths now that example loading is explicit.
 
 Automated verification is in `tests/browser.mjs`, `tests/pages.mjs`, `tests/layout.mjs` and `tests/frontend.test.mjs`. The documentation screenshot `docs/workbench.png` is an actual capture of the public example; diagnostic screenshots and user job data are ignored. The molecular drawing's exact geometry and camera naturally depend on the chosen structure; this QA does not claim an identical raster image or journal certification.

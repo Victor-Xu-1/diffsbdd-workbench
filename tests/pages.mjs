@@ -12,7 +12,8 @@ const browser = await chromium.launch({
     ? { channel: process.env.PLAYWRIGHT_CHANNEL }
     : {}),
 });
-let page;
+let page,
+  releaseDelayedResponse = () => {};
 try {
   const context = await browser.newContext({
     viewport: { width: 1536, height: 1024 },
@@ -23,6 +24,30 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(base, { waitUntil: "networkidle" });
+  assert.equal(await page.locator("#generate").isDisabled(), true);
+  assert.equal(await page.locator("#protein-read").isVisible(), false);
+  assert.equal(
+    await page
+      .locator(
+        "#project, #models-view, #prepare-view, #settings-help, #expert-mode, #guided-mode, #reuse, #verify-model, .stepper",
+      )
+      .count(),
+    0,
+  );
+  assert.deepEqual(
+    await page.evaluate(() => {
+      const seen = new Set();
+      return [...document.querySelectorAll("[id]")]
+        .map((el) => el.id)
+        .filter((id) => {
+          if (seen.has(id)) return true;
+          seen.add(id);
+          return false;
+        });
+    }),
+    [],
+  );
+  await page.locator("#load-example").click();
   await page.waitForFunction(
     () =>
       document.querySelector("#pocket-confirm-title").textContent ===
@@ -39,6 +64,43 @@ try {
   await page.locator("[data-preset=standard]").click();
   assert.equal(await page.locator("#count").inputValue(), "10");
   assert.equal(await page.locator("#steps").inputValue(), "500");
+  const contract = await (
+    await context.request.get(`${base}/api/capabilities`)
+  ).json();
+  assert.equal(await page.locator("#model").count(), 1);
+  assert.equal(
+    await page.locator("#count").getAttribute("max"),
+    String(contract.fields.count.maximum),
+  );
+  assert.equal(
+    await page.locator("#model option").count(),
+    contract.models.length,
+  );
+  if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+    await page.locator("#advanced-settings > summary").click();
+  await page.locator("[data-preset=quick]").click();
+  await page.locator("#atoms").fill("9999");
+  await page.locator("[data-task=optimize]").click();
+  assert.equal(await page.locator("#atoms").isVisible(), false);
+  assert.equal(await page.locator("#atoms").isDisabled(), true);
+  const projected = await page.evaluate(async () =>
+    (await import("/assets/controls.js")).readOptions(),
+  );
+  assert.ok(
+    !("atoms" in projected) &&
+      !("steps" in projected) &&
+      !("size_mode" in projected) &&
+      !("count" in projected),
+  );
+  assert.equal(
+    projected.population * projected.rounds,
+    contract.tasks.optimize.presets.find(
+      (p) => p.id === contract.default_preset,
+    ).attempts,
+  );
+  await page.locator("[data-task=generate]").click();
+  if (await page.locator("#advanced-settings").evaluate((el) => el.open))
+    await page.locator("#advanced-settings > summary").click();
   await page.locator("label[for=count] .field-help button").hover();
   await page.locator("#help-count").waitFor({ state: "visible" });
   assert.match(await page.locator("#help-count").innerText(), /最终有效数量/);
@@ -59,7 +121,23 @@ try {
   assert.match(record.request.protein_text, /ATOM/);
   await page.locator("#save-design-dialog").waitFor({ state: "hidden" });
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator("#project").selectOption(record.id);
+  await page.locator("[data-view=designs].nav-item").click();
+  await page.route("**/api/pockets/inspect", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "口袋读取暂不可用" }),
+    }),
+  );
+  await page.locator(`[data-design="${record.id}"]`).click();
+  await page.locator("#error").waitFor({ state: "visible" });
+  assert.ok(
+    !(await page.locator("#notice").textContent()).includes("均已恢复"),
+  );
+  assert.equal(await page.locator("#save-draft").isDisabled(), true);
+  await page.unrouteAll({ behavior: "wait" });
+  await page.locator("[data-view=designs].nav-item").click();
+  await page.locator(`[data-design="${record.id}"]`).click();
   await page.waitForFunction(() =>
     document.querySelector("#notice").textContent.includes("均已恢复"),
   );
@@ -70,8 +148,8 @@ try {
     .getByRole("button", { name: "打开并继续" })
     .first()
     .waitFor();
-  await page.locator("[data-view=prepare]").click();
-  await page.locator("#prepare-current").click();
+  await page.locator("[data-task=generate]").click();
+  await page.locator("#prepare-open").click();
   await page.waitForFunction(() =>
     document.querySelector("#prepare-status").textContent.startsWith("已处理"),
   );
@@ -156,6 +234,20 @@ try {
       chosen = Boolean(await page.locator("#fixed-atoms").inputValue());
     }
   assert.ok(chosen, "Could not select an actual starting ligand atom/ring");
+  if (!(await page.locator("#advanced-settings").evaluate((el) => el.open)))
+    await page.locator("#advanced-settings > summary").click();
+  await page.locator("#fixed-atoms").fill("invalid");
+  await page.locator("#fragment-pick").focus();
+  assert.equal(
+    await page.locator("#fixed-atoms").evaluate((el) => el.checkValidity()),
+    false,
+  );
+  assert.equal(await page.locator("#generate").isDisabled(), true);
+  await page.locator("#keep-scaffold").click();
+  assert.equal(
+    await page.locator("#fixed-atoms").evaluate((el) => el.checkValidity()),
+    true,
+  );
   assert.match(
     await page.locator("#fragment-count").innerText(),
     /已保留 [1-9]/,
@@ -173,27 +265,35 @@ try {
   await page.locator("#compare-run").click();
   await page.locator("#compare-output table").waitFor();
   assert.match(await page.locator("#compare-output").innerText(), /平均 QED/);
-  await page.locator("[data-view=models]").click();
-  const verify = page.locator("[data-verify-model]").first();
-  if (await verify.isEnabled()) {
-    await verify.click();
-    await page.waitForFunction(() =>
-      document
-        .querySelector("#model-verification")
-        .textContent.includes("完整"),
-    );
-  }
+  await page.locator("[data-task=generate]").click();
   await page.locator("#nav-results").click();
   const jobs = await (await context.request.get(`${base}/api/jobs`)).json();
   if (jobs.length >= 2) {
-    const slow = jobs[0].id,
-      chosen = jobs[1].id;
+    const slow = jobs[1].id,
+      chosen = jobs[0].id;
+    const gate = new Promise((resolve) => {
+      releaseDelayedResponse = resolve;
+    });
+    const handlers = [];
+    const intercepted = page.waitForRequest(
+      (request) => request.url() === `${base}/api/jobs/${slow}`,
+    );
     await page.route(`**/api/jobs/${slow}`, async (route) => {
-      const response = await route.fetch();
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      await route.fulfill({ response });
+      const handling = (async () => {
+        const response = await route.fetch();
+        await gate;
+        await route.fulfill({ response });
+      })();
+      // Return any route failure to the main test instead of leaving a detached rejection.
+      const observed = handling.then(
+        () => null,
+        (error) => error,
+      );
+      handlers.push(observed);
+      await observed;
     });
     await page.locator("#history").selectOption(slow);
+    await intercepted;
     await page.locator("#history").selectOption(chosen);
     await page.waitForFunction(
       (id) =>
@@ -203,6 +303,10 @@ try {
           ?.includes(id),
       chosen,
     );
+    releaseDelayedResponse();
+    const routeFailure = (await Promise.all(handlers)).find(Boolean);
+    if (routeFailure) throw routeFailure;
+    await page.unrouteAll({ behavior: "wait" });
     await page.waitForLoadState("networkidle");
     assert.equal(await page.locator("#history").inputValue(), chosen);
     assert.ok(
@@ -210,8 +314,48 @@ try {
         await page.locator("#downloads a").first().getAttribute("href")
       ).includes(chosen),
     );
-    await page.unrouteAll({ behavior: "wait" });
   }
+  await page.waitForFunction(
+    () => !document.querySelector("#save-edit").disabled,
+  );
+  const editParent = await page.locator("#history").inputValue();
+  await page.route("**/api/poses/inspect", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "预览解析暂时不可用" }),
+    }),
+  );
+  const savedResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/jobs/${editParent}/edits`) &&
+      response.request().method() === "POST",
+  );
+  await page.locator("#save-edit").click();
+  const savedEdit = await (await savedResponse).json();
+  assert.ok(savedEdit.id);
+  await page.waitForFunction(() =>
+    document
+      .querySelector("#edit-message")
+      .textContent.includes("编辑版已保存，但后续预览"),
+  );
+  const persistedJob = await (
+    await context.request.get(`${base}/api/jobs/${editParent}`)
+  ).json();
+  assert.ok(persistedJob.edits.some((edit) => edit.id === savedEdit.id));
+  await page.unrouteAll({ behavior: "wait" });
+  await page
+    .locator(".edit-row")
+    .filter({ has: page.locator(`a[href$="/${savedEdit.id}.sdf"]`) })
+    .getByRole("button")
+    .click();
+  await page.waitForFunction(() =>
+    document.querySelector("#molecule-detail").textContent.includes("编辑版"),
+  );
+  assert.match(await page.locator("#selection-sync").innerText(), /已建立对应/);
+  console.log(
+    "Passed: saved edit survives preview failure and reopens from persisted history",
+  );
   await page.locator("[data-task=generate]").click();
   await page.locator("#load-example").click();
   await page.waitForFunction(
@@ -223,8 +367,37 @@ try {
     path: path.join(root, "test-results/pages/desktop.png"),
   });
   assert.deepEqual(errors, []);
+  const unavailable = await context.newPage();
+  await unavailable.route("**/api/capabilities", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "配置暂时无法读取" }),
+    }),
+  );
+  await unavailable.goto(base, { waitUntil: "networkidle" });
+  assert.equal(await unavailable.locator("#generate").isDisabled(), true);
+  assert.equal(await unavailable.locator("#protein-read").isVisible(), false);
+  assert.equal(await unavailable.locator("#error").isVisible(), true);
+  await unavailable.close();
+  await page.locator("[data-view=designs].nav-item").click();
+  await page.locator("#new-design").click();
+  assert.equal(await page.locator("#protein-name").innerText(), "尚未选择蛋白");
+  assert.equal(await page.locator("#generate").isDisabled(), true);
+  assert.equal(
+    await page.locator("#current-design").innerText(),
+    "未保存的设计",
+  );
+  assert.equal(
+    await page.locator("#count").inputValue(),
+    String(
+      contract.tasks.generate.presets.find(
+        (p) => p.id === contract.default_preset,
+      ).options.count,
+    ),
+  );
   console.log(
-    "Passed: direct fragment/ring selection, scaffold selection, batch SDF export, actual task comparison and model page",
+    "Passed: direct fragment/ring selection, scaffold selection, batch SDF export, actual task comparison and model choices",
   );
 } catch (error) {
   if (page) {
@@ -236,5 +409,7 @@ try {
   }
   throw error;
 } finally {
+  releaseDelayedResponse();
+  if (page) await page.unrouteAll({ behavior: "wait" });
   await browser.close();
 }

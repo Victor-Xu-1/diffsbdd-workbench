@@ -1,5 +1,11 @@
 import { $, parseAtomNumbers, setAtomSelection } from "./controls.js";
 import { clearFigureLabels } from "./figure-labels.js";
+import {
+  selectionGroup,
+  toggleGroup,
+  enableMolecularHover,
+  clearHover,
+} from "./molecular-selection.js";
 /** Input pocket visualization in unmodified PDB coordinates. */
 import {
   applyCamera,
@@ -12,15 +18,19 @@ import {
 import { registerFigure } from "./figure-panel.js";
 let viewer,
   data,
-  styleName = "surface",
   serial = 0,
   selectResidue;
 let surfaceTask = Promise.resolve(),
-  settings;
+  settings,
+  pendingResidues = null;
 const element = () => document.getElementById("pocket-viewer");
 async function drawSurface(current) {
   viewer.removeAllSurfaces();
-  if (styleName !== "surface" || !data.residues.length) {
+  if (
+    !settings.showSurface ||
+    settings.proteinScope === "none" ||
+    !data.residues.length
+  ) {
     element().dataset.ready = "true";
     return;
   }
@@ -32,7 +42,16 @@ async function drawSurface(current) {
   const pocketIds = new Set(data.residues);
   const close = new Set(nearbyAtoms(model, atoms, 5).map((a) => a.index));
   const selection = atoms.length
-    ? { model: 0, index: visible.map((a) => a.index) }
+    ? {
+        model: 0,
+        index: visible
+          .filter(
+            (atom) =>
+              settings.proteinScope !== "pocket" ||
+              pocketIds.has(`${atom.chain}:${atom.resi}`),
+          )
+          .map((a) => a.index),
+      }
     : { model: 2 };
   try {
     await viewer.addSurface(
@@ -52,33 +71,64 @@ async function drawSurface(current) {
   } catch (error) {
     if (current === serial)
       document.getElementById("pocket-viewer-note").textContent =
-        "表面绘制未完成，可切换卡通或球棍后重试。";
+        "表面绘制未完成，可选择结合位点方案查看，或重选口袋表面重试。";
     throw error;
   }
 }
 function surfaceError(error) {
   document.getElementById("pocket-viewer-note").textContent =
-    `表面绘制失败：${error.message}。可切换卡通或球棍查看。`;
+    `表面绘制失败：${error.message}。可选择结合位点方案查看。`;
 }
 function style() {
   if (!viewer || !data) return Promise.resolve();
   const current = ++serial;
   element().dataset.ready = "false";
   clearFigureLabels(viewer);
+  clearHover(viewer);
   applyCamera(viewer, settings);
   viewer.setStyle({ model: 0 }, {});
+  const pocketIds = new Set(data.residues);
+  const proteinSelection = {
+    model: 0,
+    hetflag: false,
+    ...(settings.proteinScope === "pocket"
+      ? { predicate: (atom) => pocketIds.has(`${atom.chain}:${atom.resi}`) }
+      : {}),
+  };
+  if (settings.proteinScope !== "none")
+    viewer.setStyle(proteinSelection, proteinStyle(settings));
   viewer.setStyle(
-    { model: 0, hetflag: false },
-    proteinStyle({
-      ...settings,
-      representation: styleName === "stick" ? "stick" : settings.representation,
-    }),
+    { model: 1 },
+    ligandStyle(settings.ligandRepresentation, settings),
   );
-  viewer.setStyle({ model: 1 }, ligandStyle("stick", settings));
   viewer.setStyle({ model: 2 }, {});
   const reference = viewer.getModel(1).selectedAtoms({});
-  residueContext(viewer, settings, reference);
+  if (settings.proteinScope !== "none")
+    residueContext(
+      viewer,
+      settings,
+      reference,
+      0,
+      settings.proteinScope === "pocket" ? pocketIds : null,
+    );
+  if (
+    $("pocket-type").value === "residues" &&
+    settings.proteinScope !== "none"
+  ) {
+    const ids = pendingResidues || new Set(data.residues);
+    viewer.addStyle(
+      { model: 0, predicate: (atom) => ids.has(`${atom.chain}:${atom.resi}`) },
+      { stick: { radius: 0.1, color: "#e5a12b", opacity: 1 } },
+    );
+  }
+  document.querySelector(
+    ".pocket-preview-panel .protein-dot",
+  ).style.backgroundColor = settings.proteinColor;
+  document.querySelector(
+    ".pocket-preview-panel .ligand-dot",
+  ).style.backgroundColor = settings.carbonColor;
   clickTargets();
+  enableMolecularHover(viewer);
   paintAtoms();
   viewer.resize();
   viewer.render();
@@ -86,11 +136,21 @@ function style() {
   return surfaceTask;
 }
 export function showPocket(value, onResidue) {
+  element().hidden = false;
+  $("pocket-empty").hidden = true;
+  for (const button of document.querySelectorAll(
+    '[data-figure="pocket"], [data-figure-preset="pocket"], #pocket-reset, #pocket-fullscreen',
+  ))
+    button.disabled = false;
   const camera =
     viewer && data?.protein === value.protein && data?.initial === value.initial
       ? viewer.getView()
       : null;
   data = value;
+  pendingResidues = null;
+  $("pocket-ligand-caption").textContent = value.initial
+    ? "起始分子"
+    : "参考配体";
   selectResidue = onResidue;
   if (!viewer)
     viewer = window.$3Dmol.createViewer(element(), {
@@ -117,9 +177,27 @@ export function resetPocket() {
   resetCamera(
     viewer,
     data?.initial || data?.reference ? 1 : data?.residues.length ? 2 : 0,
-    data?.initial || data?.reference?.length ? 0.7 : 1,
+    data?.initial || data?.reference?.length ? 1.05 : 1,
     60,
   );
+}
+export function clearPocket() {
+  data = null;
+  ++serial;
+  if (viewer) {
+    viewer.removeAllModels();
+    viewer.removeAllSurfaces();
+    viewer.removeAllShapes();
+    viewer.removeAllLabels();
+    viewer.render();
+  }
+  element().hidden = true;
+  element().dataset.ready = "false";
+  $("pocket-empty").hidden = false;
+  for (const button of document.querySelectorAll(
+    '[data-figure="pocket"], [data-figure-preset="pocket"], #pocket-reset, #pocket-fullscreen',
+  ))
+    button.disabled = true;
 }
 function clickTargets() {
   if (!viewer || !data) return;
@@ -135,12 +213,25 @@ function clickTargets() {
   viewer.render();
 }
 function paintAtoms() {
-  const indices = parseAtomNumbers($("fixed-atoms").value);
+  const input = $("fixed-atoms");
+  let indices;
+  try {
+    indices = parseAtomNumbers(input.value);
+    input.setCustomValidity("");
+  } catch (error) {
+    input.setCustomValidity(error.message);
+    $("fragment-count").textContent = "原子编号无效";
+    $("pocket-viewer-note").textContent = error.message;
+    return;
+  }
   $("fragment-count").textContent = `已保留 ${indices.length} 个原子`;
   for (const id of ["keep-scaffold", "keep-periphery"])
     $(id).disabled = !data?.initial;
   if (!viewer || !data) return;
-  viewer.setStyle({ model: 1 }, ligandStyle("stick", settings));
+  viewer.setStyle(
+    { model: 1 },
+    ligandStyle(settings.ligandRepresentation, settings),
+  );
   if (data.initial && $("task").value === "inpaint" && indices.length)
     viewer.addStyle(
       { model: 1, index: indices },
@@ -155,33 +246,19 @@ function pickFragment(index) {
     $("pocket-selection-mode").value !== "fragment"
   )
     return;
-  const group = new Set([index]);
-  if ($("fragment-pick").value === "ring") {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const ring of data.rings || [])
-        if (ring.some((i) => group.has(i)))
-          for (const i of ring)
-            if (!group.has(i)) {
-              group.add(i);
-              changed = true;
-            }
-    }
-  }
-  const selected = new Set(parseAtomNumbers($("fixed-atoms").value));
-  const remove = [...group].every((i) => selected.has(i));
-  for (const i of group) remove ? selected.delete(i) : selected.add(i);
-  setAtomSelection([...selected]);
+  const group = selectionGroup(
+    index,
+    data.rings || [],
+    $("fragment-pick").value,
+  );
+  setAtomSelection(
+    toggleGroup(parseAtomNumbers($("fixed-atoms").value), group),
+  );
 }
 export function highlightPocketSelection(ids) {
   if (!viewer || !data) return;
-  viewer.setStyle({ model: 0, hetflag: false }, proteinStyle(settings));
-  viewer.addStyle(
-    { model: 0, predicate: (atom) => ids.has(`${atom.chain}:${atom.resi}`) },
-    { stick: { radius: 0.12, color: 0xe5a12b } },
-  );
-  viewer.render();
+  pendingResidues = new Set(ids);
+  void style().catch(surfaceError);
 }
 export function setupPocketViewer() {
   $("pocket-selection-mode").addEventListener("change", clickTargets);
@@ -209,15 +286,12 @@ export function setupPocketViewer() {
     element,
     redraw: style,
     ready: () => surfaceTask,
+    focus: (target) => {
+      if (target === "protein") {
+        resetCamera(viewer, 0, 0.95);
+      } else resetPocket();
+    },
   });
-  for (const button of document.querySelectorAll("[data-pocket-style]"))
-    button.addEventListener("click", () => {
-      styleName = button.dataset.pocketStyle;
-      document
-        .querySelectorAll("[data-pocket-style]")
-        .forEach((item) => item.classList.toggle("selected", item === button));
-      void style().catch(surfaceError);
-    });
   document
     .getElementById("pocket-reset")
     .addEventListener("click", resetPocket);

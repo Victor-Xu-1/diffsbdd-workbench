@@ -1,14 +1,16 @@
 import { $, readFile, syncControls, setAtomSelection } from "./controls.js";
 import { api } from "./api.js";
+import { getContract } from "./contract.js";
 import {
   showPocket,
   setupPocketViewer,
   highlightPocketSelection,
+  clearPocket,
 } from "./pocket-viewer.js";
 let proteinText = "",
   referenceText = "",
   initialText = "",
-  referenceId = "A:330",
+  referenceId = "",
   current = null,
   sequence = 0,
   timer = null;
@@ -80,6 +82,8 @@ export async function inspectPocket() {
     $("pocket-confirm-detail").textContent =
       `已识别 ${data.residue_count} 个口袋残基。可直接在预览上点击调整。`;
     $("protein-read").hidden = false;
+    $("show-residues").disabled = false;
+    $("prepare-open").disabled = false;
     onReady(true);
     return true;
   } catch (error) {
@@ -147,6 +151,7 @@ export async function loadProtein(text, name = "蛋白.pdb") {
   pending("正在识别蛋白与参考配体");
   onError();
   resetFiles();
+  const version = sequence;
   const data = await api("/api/structures/prepare", {
     method: "POST",
     body: JSON.stringify({
@@ -155,6 +160,7 @@ export async function loadProtein(text, name = "蛋白.pdb") {
       keep_ligands: true,
     }),
   });
+  if (version !== sequence) return;
   proteinText = data.protein;
   $("protein-name").textContent = name;
   $("mode").value = "custom";
@@ -191,6 +197,8 @@ export async function loadProtein(text, name = "蛋白.pdb") {
     $("pocket-confirm-detail").textContent =
       "没有参考配体也可以设计：直接在右侧蛋白上点选。";
     $("protein-read").hidden = false;
+    $("show-residues").disabled = false;
+    $("prepare-open").disabled = false;
   }
 }
 export async function restorePocketInputs(data) {
@@ -213,9 +221,10 @@ export async function restorePocketInputs(data) {
 export async function loadExample() {
   resetFiles();
   $("mode").value = "demo";
-  referenceId = "A:330";
-  $("protein-name").textContent = "3rfm.pdb";
-  $("reference-name").textContent = "PDB 内参考配体 · A:330";
+  const example = getContract().example;
+  referenceId = example.reference;
+  $("protein-name").textContent = example.name;
+  $("reference-name").textContent = `PDB 内参考配体 · ${example.reference}`;
   $("ligand-choice").hidden = true;
   method("reference");
   return inspectPocket();
@@ -297,7 +306,6 @@ export function setupPocketUI(callbacks) {
       } else void inspectPocket();
     }),
   );
-  $("confirm-pocket").addEventListener("click", inspectPocket);
   $("show-residues").addEventListener("click", residueDialog);
   $("apply-residues").addEventListener("click", async () => {
     selected.clear();
@@ -314,4 +322,24 @@ export function hasInitialPose() {
   return $("mode").value === "result"
     ? Boolean(getSource())
     : Boolean(initialText);
+}
+
+export function clearInputs() {
+  resetFiles();
+  pending("请先选择蛋白");
+  proteinText = "";
+  referenceId = "";
+  current = null;
+  selected.clear();
+  $("mode").value = "custom";
+  $("protein-name").textContent = "尚未选择蛋白";
+  $("reference-name").textContent = "尚未选择参考配体";
+  $("reference").value = "";
+  $("protein-read").hidden = true;
+  $("show-residues").disabled = true;
+  $("prepare-open").disabled = true;
+  $("ligand-choice").hidden = true;
+  $("pocket-confirm-detail").textContent =
+    "上传 PDB，或点击右上角载入官方示例。";
+  clearPocket();
 }

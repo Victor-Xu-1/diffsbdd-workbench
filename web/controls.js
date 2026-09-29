@@ -1,127 +1,68 @@
+import { getContract, fieldActive, projectOptions } from "./contract.js";
 export const $ = (id) => document.getElementById(id);
-export const schema = [
-  ["count", "生成数量", 3, 1, 100, "sampling-fields"],
-  ["atoms", "目标大小（重原子数）", 32, 8, 80, "advanced-fields"],
-  ["added_atoms", "新增重原子数", 10, 0, 79, "inpaint-controls"],
-  ["population", "每轮探索候选数", 10, 1, 100, "optimization-fields"],
-  ["rounds", "优化轮数", 2, 1, 20, "optimization-fields"],
-  ["survivors", "每轮保留候选数", 3, 1, 100, "optimization-fields"],
-  ["change_steps", "结构改动幅度（1–500）", 100, 1, 500, "optimization-fields"],
-  ["steps", "构象探索步数", 500, 10, 500, "advanced-fields"],
-  ["resamplings", "每步重复探索次数", 1, 1, 20, "advanced-fields"],
-  ["jump_length", "重新探索跨度", 1, 1, 50, "advanced-fields"],
-  ["minimum_atoms", "自动大小的最少重原子数", 8, 8, 80, "advanced-fields"],
-  ["size_bias", "自动大小的重原子数调整", 0, -30, 30, "advanced-fields"],
-  ["relaxation", "自由构象松弛次数（0 为关闭）", 0, 0, 1000, "advanced-fields"],
-  ["seed", "复现实验编号（随机种子）", 2026, 0, 2147483647, "advanced-fields"],
-];
-const choices = [
-  [
-    "size_mode",
-    "分子大小",
-    [
-      ["fixed", "指定大小"],
-      ["sample", "自动采样"],
-    ],
-    "sampling-fields",
-  ],
-  [
-    "center",
-    "新原子的初始探索区域",
-    [
-      ["ligand", "保留片段周围"],
-      ["pocket", "口袋中心周围"],
-    ],
-    "inpaint-controls",
-  ],
-  [
-    "bond_mode",
-    "保留方式",
-    [
-      ["fragment", "完整片段（元素、位置、内部化学键）"],
-      ["atoms", "仅元素与位置（官方原子约束）"],
-    ],
-    "inpaint-controls",
-  ],
-  [
-    "objective",
-    "优化目标",
-    [
-      ["qed", "提高类药性（QED，0–1，越高越好）"],
-      ["sa", "降低合成难度（SA，1–10，越低越好）"],
-    ],
-    "optimization-fields",
-  ],
-  [
-    "fragment_policy",
-    "不相连片段的处理",
-    [
-      ["largest", "只保留最大片段"],
-      ["all", "保留所有片段并标明未连接"],
-    ],
-    "advanced-fields",
-  ],
-];
+const fields = () => Object.entries(getContract().fields);
+function value(field) {
+  const input = $(field.id);
+  if (field.type === "boolean")
+    return field.choices ? input.value === "true" : input.checked;
+  if (field.type === "integer") return Number(input.value);
+  return input.value;
+}
+function formValues() {
+  const values = { task: $("task").value, model: $("model").value };
+  for (const [name, field] of fields())
+    if (name !== "fixed_atoms") values[name] = value(field);
+  return values;
+}
 export function mountControls() {
-  for (const [id, label, value, min, max, target] of schema) {
+  const config = getContract();
+  $("task").replaceChildren(
+    ...Object.entries(config.tasks).map(
+      ([id, task]) => new Option(task.label, id),
+    ),
+  );
+  $("task").value = config.default_task;
+  for (const [name, field] of fields()) {
+    if (!field.section) continue;
     const group = document.createElement("div");
-    group.id = `${id}-field`;
+    group.id = field.id + "-field";
     const caption = document.createElement("label");
-    caption.htmlFor = id;
-    caption.textContent = label;
-    const input = document.createElement("input");
-    Object.assign(input, {
-      id,
-      type: "number",
-      min,
-      max,
-      value,
-      required: true,
-    });
+    caption.htmlFor = field.id;
+    caption.textContent = field.label;
+    const input = document.createElement(field.choices ? "select" : "input");
+    input.id = field.id;
+    if (field.choices)
+      for (const choice of field.choices)
+        input.add(new Option(choice.label, String(choice.value)));
+    else if (field.type === "boolean") input.type = "checkbox";
+    else if (field.type === "array") input.type = "text";
+    else {
+      input.type = "number";
+      input.required = true;
+      if (field.minimum !== undefined) input.min = field.minimum;
+      if (field.maximum !== undefined) input.max = field.maximum;
+    }
+    if (input.type === "checkbox") input.checked = field.default;
+    else input.value = String(field.default ?? "");
     group.append(caption, input);
-    $(target).append(group);
+    $(field.section).append(group);
   }
-  for (const [id, label, values, target] of choices) {
-    const group = document.createElement("div");
-    group.id = `${id}-field`;
-    const caption = document.createElement("label");
-    caption.htmlFor = id;
-    caption.textContent = label;
-    const select = document.createElement("select");
-    select.id = id;
-    values.forEach(([value, text]) => select.add(new Option(text, value)));
-    group.append(caption, select);
-    $(target).append(group);
-  }
-  const label = document.createElement("label");
-  label.className = "checks";
-  const input = document.createElement("input");
-  input.id = "trajectory";
-  input.type = "checkbox";
-  label.append(input, " 保存生成过程（单个候选，可播放）");
-  $("inpaint-controls").append(label);
-  const modelGroup = document.createElement("div"),
-    modelLabel = document.createElement("label"),
-    modelName = document.createElement("span");
-  modelGroup.id = "model-summary";
-  modelLabel.textContent = "模型";
-  modelName.id = "model-family";
-  modelName.className = "model-readonly";
-  modelName.textContent = "CrossDocked";
-  modelGroup.append(modelLabel, modelName);
-  $("sampling-fields").append(modelGroup);
-  for (const [id, text] of [
-    ["count", "建议先生成 3–10 个试用"],
-    ["size_mode", "根据口袋自动确定合适的分子大小"],
-    ["model-summary", "使用官方数据集的预训练模型"],
-  ]) {
-    const p = document.createElement("p");
-    p.className = "hint";
-    p.textContent = text;
-    $(id === "model-summary" ? id : `${id}-field`).append(p);
-  }
-  $("size_mode").value = "sample";
-
+  $("model").replaceChildren(
+    ...config.models.map(
+      (model) =>
+        new Option(
+          model.label + (model.installed ? "" : "（未安装）"),
+          model.id,
+        ),
+    ),
+  );
+  $("model").value = config.default_model;
+  $("continue-task").replaceChildren(
+    ...Object.entries(config.tasks)
+      .filter(([id]) => id !== config.default_task)
+      .map(([id, task]) => new Option(task.label, id)),
+  );
+  $("continue-task").value = config.continuation_task;
   for (const id of [
     "task",
     "mode",
@@ -131,67 +72,44 @@ export function mountControls() {
     "trajectory",
   ])
     $(id).addEventListener("change", syncControls);
-
   syncControls();
 }
 export function syncControls() {
-  const task = $("task").value,
-    source = $("mode").value,
-    joint = $("model").value.endsWith("_joint");
-  $("task-help").textContent = {
-    generate: "从所选蛋白口袋出发探索全新的结构。",
-    diversify: "从起始三维分子生成变体，不进行性质排序或逐轮选择。",
-    inpaint:
-      "固定所选片段的元素和空间位置，重建其余部分；化学键由坐标重建，再校验片段是否保留。",
-    optimize: "从起始分子逐轮探索，按指定性质选择下一轮起点；不保证指标改善。",
-  }[task];
-  $("custom-input").hidden = source === "demo";
+  const config = getContract(),
+    task = $("task").value,
+    source = $("mode").value;
+  const available = config.models.filter((m) => m.tasks.includes(task));
+  for (const option of $("model").options)
+    option.disabled = !available.some((m) => m.id === option.value);
+  if (!available.some((m) => m.id === $("model").value))
+    $("model").value =
+      (available.find((m) => m.installed) || available[0])?.id || "";
+  const model = config.models.find((m) => m.id === $("model").value);
+  const values = { ...formValues(), strategy: model?.strategy };
+  for (const rule of config.rules) {
+    if (
+      Object.entries(rule.when).every(([key, allowed]) =>
+        allowed.includes(values[key]),
+      )
+    )
+      for (const [key, v] of Object.entries(rule.set)) {
+        values[key] = v;
+        $(config.fields[key].id).value = v;
+      }
+  }
+  for (const [name, field] of fields()) {
+    const active = fieldActive(field, values),
+      input = $(field.id);
+    if (field.section) $(field.id + "-field").hidden = !active;
+    input.disabled = !active;
+  }
   $("result-source").hidden = source !== "result";
   $("initial-input").hidden = task === "generate" || source === "result";
   $("inpaint-fields").hidden = task !== "inpaint";
   $("fragment-toolbar").hidden = task !== "inpaint";
   document.body.classList.toggle("fragment-design", task === "inpaint");
-  $("optimization-fields").hidden = task !== "optimize";
-  $("diversification-fields").hidden = task !== "diversify";
-  $(
-    task === "diversify" ? "diversification-fields" : "optimization-fields",
-  ).append($("change_steps-field"));
-  $("size_mode-field").hidden = task === "diversify";
-  $("model-strategy").querySelector('[value="joint"]').disabled =
-    task !== "generate";
-
+  $("optimization-fields").hidden = task !== "optimize" && task !== "diversify";
   $("sampling-fields").hidden = task === "optimize";
-  $("steps-field").hidden = ["optimize", "diversify"].includes(task);
-  $("resamplings-field").hidden =
-    ["optimize", "diversify"].includes(task) || (task === "generate" && !joint);
-  $("jump_length-field").hidden = task !== "generate" || !joint;
-  $("atoms-field").hidden =
-    ["inpaint", "diversify"].includes(task) ||
-    $("size_mode").value === "sample";
-  $("added_atoms-field").hidden = $("size_mode").value === "sample";
-  $("minimum_atoms-field").hidden =
-    $("size_mode").value !== "sample" ||
-    ["optimize", "diversify"].includes(task);
-  $("size_bias-field").hidden = $("minimum_atoms-field").hidden;
-  $("relaxation").disabled = task === "inpaint";
-  $("fragment_policy").disabled = task === "inpaint";
-  if (task === "inpaint") {
-    $("relaxation").value = 0;
-    $("fragment_policy").value = "all";
-  }
-  for (const option of $("model").options)
-    option.disabled =
-      option.dataset.installed === "false" ||
-      (task !== "generate" && option.value.endsWith("_joint"));
-  if (task !== "generate" && joint)
-    $("model").value = "crossdocked_fullatom_cond";
-  if (task === "inpaint" && $("trajectory").checked) $("count").value = 1;
-  const pocket = $("pocket-type").value;
-  $("sdf-input").hidden = pocket !== "sdf";
-  $("reference").hidden = pocket === "sdf";
-  $("reference-label").hidden = pocket === "sdf";
-  $("reference-label").textContent =
-    pocket === "residues" ? "残基编号，用空格或逗号分隔" : "配体编号，如 A:330";
 }
 export function parseAtomNumbers(text) {
   if (!text.trim()) return [];
@@ -207,45 +125,39 @@ export function parseAtomNumbers(text) {
   return values.map((x) => x - 1).sort((a, b) => a - b);
 }
 export function readOptions() {
-  const options = { task: $("task").value, model: $("model").value };
-  for (const [id] of schema) options[id] = Number($(id).value);
-  for (const [id] of choices) options[id] = $(id).value;
-  options.preserve_bonds = options.bond_mode === "fragment";
-  delete options.bond_mode;
-  options.fixed_atoms =
-    options.task === "inpaint" ? parseAtomNumbers($("fixed-atoms").value) : [];
-  options.trajectory = options.task === "inpaint" && $("trajectory").checked;
-  if (options.task === "inpaint" && !options.fixed_atoms.length)
-    throw new Error("请在预览中选择保留原子，或输入原子编号。");
-  if (
-    options.task === "optimize" &&
-    (options.population * options.rounds > 100 ||
-      options.survivors > options.population)
-  )
-    throw new Error("优化总候选数不能超过 100，且保留数不能大于每轮候选数。");
-  return options;
+  const values = formValues();
+  values.fixed_atoms =
+    values.task === "inpaint" ? parseAtomNumbers($("fixed-atoms").value) : [];
+  for (const field of Object.values(getContract().fields)) {
+    const input = $(field.id);
+    if (!input.disabled && !input.checkValidity())
+      throw new Error(field.label + "：请检查输入范围。");
+  }
+  if (values.task === "inpaint" && !values.fixed_atoms.length)
+    throw new Error("请在预览中选择需要保留的原子或整环。");
+  return projectOptions(values);
 }
 export function restoreOptions(options) {
-  $("bond_mode").value =
-    options.preserve_bonds === false ? "atoms" : "fragment";
-  for (const [key, value] of Object.entries(options || {})) {
-    if ($(key) && typeof value !== "object")
-      $(key).type === "checkbox"
-        ? ($(key).checked = value)
-        : ($(key).value = value);
+  for (const name of ["task", "model"])
+    if (options[name] !== undefined) $(name).value = options[name];
+  for (const [name, field] of fields()) {
+    const v = options[name];
+    if (v === undefined) continue;
+    const input = $(field.id);
+    if (name === "fixed_atoms") input.value = v.map((i) => i + 1).join(",");
+    else if (input.type === "checkbox") input.checked = v;
+    else input.value = String(v);
   }
-  $("fixed-atoms").value = (options.fixed_atoms || [])
-    .map((i) => i + 1)
-    .join(",");
   syncControls();
 }
 export async function readFile(id, limit, title) {
   const file = $(id).files[0];
   if (!file || file.size > limit)
-    throw new Error(`请选择${title}，文件不得超过 ${limit / 1000000} MB。`);
+    throw new Error(
+      "请选择" + title + "，文件不得超过 " + limit / 1000000 + " MB。",
+    );
   return file.text();
 }
-
 export function setAtomSelection(indices) {
   $("fixed-atoms").value = [...new Set(indices)]
     .sort((a, b) => a - b)
