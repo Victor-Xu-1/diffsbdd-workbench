@@ -41,4 +41,3 @@ Test artifacts, logs, GPU output and feedback stay in ignored local directories.
 ## Clean checkout and installation
 
 A separate Git clone under a temporary Linux directory was installed into a new CPU virtual environment using the production dependency constraints: 34 tests passed and all 53 vendor hashes matched. Re-running the documented full installer verified all eight weight files, 91 installed packages, the pinned upstream patch, real CUDA/scatter and chemistry kernels. The Windows background-service installer also completed and its HTTP readiness check passed.
-
