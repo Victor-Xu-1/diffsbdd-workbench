@@ -415,6 +415,9 @@ body[data-view="editor"] .status-panel {
   body[data-view="editor"] #editor {
     height: 560px;
   }
+  body[data-view="editor"] #viewer {
+    height: 560px;
+  }
 }
 @media (max-width: 1250px) {
   body[data-view="editor"] .results-workspace {

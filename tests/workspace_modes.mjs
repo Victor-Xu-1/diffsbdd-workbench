@@ -126,6 +126,36 @@ try {
     }
     if (view === "editor") {
       assert.equal(await page.locator(".status-panel").isVisible(), false);
+      await page.evaluate(() => {
+        const ketcher = document.querySelector("#editor").contentWindow.ketcher;
+        const layout = ketcher.layout.bind(ketcher);
+        ketcher.layout = async () => {
+          ketcher.layout = layout;
+          await new Promise((resolve) => {
+            window.releaseEditorLayout = resolve;
+          });
+          return layout();
+        };
+      });
+      await page
+        .locator("#history")
+        .selectOption(await page.locator("#history").inputValue());
+      await page.waitForFunction(() => !!window.releaseEditorLayout);
+      assert.equal(
+        await page.locator("#editor").getAttribute("aria-busy"),
+        "true",
+      );
+      assert.equal(
+        await page
+          .locator("#editor")
+          .evaluate((frame) => getComputedStyle(frame).pointerEvents),
+        "none",
+      );
+      assert.ok(await page.locator("#save-edit").isDisabled());
+      await page.evaluate(() => window.releaseEditorLayout());
+      await page.waitForFunction(
+        () => !document.querySelector("#save-edit").disabled,
+      );
       await page.waitForFunction(
         () =>
           document.querySelector("#editor").getAttribute("aria-busy") ===
@@ -133,6 +163,17 @@ try {
       );
       assert.equal(await page.locator("#editor").isVisible(), true);
       assert.equal(await page.locator("#viewer").isVisible(), true);
+      assert.ok(
+        await page.evaluate(() =>
+          [
+            ...document
+              .querySelector("#editor")
+              .contentWindow.ketcher.editor.struct()
+              .atoms.values(),
+          ].every((atom) => Math.abs(atom.pp.z || 0) < 1e-6),
+        ),
+        "The sketcher must use a real 2D layout, not projected 3D coordinates",
+      );
       assert.equal(
         await page.locator("#results-title").innerText(),
         "结构编辑与设计反馈",
@@ -193,7 +234,8 @@ try {
           (item) =>
             item.width > 3 && item.x > 35 && item.right < item.view - 35,
         ),
-        "Chemical atom labels must be readable and clear of side toolbars",
+        "Chemical atom labels must be readable and clear of side toolbars: " +
+          JSON.stringify(drawing),
       );
     }
     await page.evaluate(() => window.scrollTo(0, 0));

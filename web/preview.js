@@ -4,6 +4,7 @@ import {
   resetCamera,
   fitBindingSite,
   ligandStyle,
+  selectedLigandStyle,
   proteinStyle,
   nearbyAtoms,
   residueContext,
@@ -119,7 +120,7 @@ function style() {
   if (selected.size)
     viewer.addStyle(
       { model: 1, index: [...selected] },
-      { sphere: { scale: 0.4, color: "#f39b32" } },
+      selectedLigandStyle(figureSettings),
     );
   if (comparisonModel) {
     comparisonModel.setStyle(

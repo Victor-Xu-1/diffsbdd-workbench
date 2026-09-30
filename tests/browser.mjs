@@ -136,6 +136,9 @@ try {
   }
   await page.locator(".molecule").first().click();
   await page.locator("#nav-editor").click();
+  await page.waitForFunction(
+    () => !document.getElementById("save-edit").disabled,
+  );
   await page.locator("#editor").scrollIntoViewIfNeeded();
   const frame = page.frameLocator("#editor");
   await frame.getByTestId("F-button").click();

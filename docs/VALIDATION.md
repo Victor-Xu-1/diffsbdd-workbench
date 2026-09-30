@@ -4,7 +4,7 @@ Local release verification, 2026-09-29 (UTC). Hardware: Windows 11 / Ubuntu WSL2
 
 ## Version 0.4.1 task-focused pages
 
-Verified on 2026-09-30 against baseline `55f365b195d126ec25f7e7ae00ff253fd4491dac`. Scope: remove the duplicate standalone preview page; expose distinct source/controls for four design tasks; allow direct result-to-design continuation; keep the editor focused on editing. Embedded molecular viewers remain. No inference adapter, dependency, job schema or model changes.
+Verified on 2026-09-30 against baseline `55f365b195d126ec25f7e7ae00ff253fd4491dac`. Scope: remove the duplicate standalone preview page; expose distinct source/controls for four design tasks; allow direct result-to-design continuation; improve scientific scene presentation and native 2D editor layout. Embedded molecular viewers remain. No inference adapter, dependency, job schema or model changes.
 
 | Change | Risk / acceptance | Evidence |
 |---|---|---|
@@ -12,15 +12,17 @@ Verified on 2026-09-30 against baseline `55f365b195d126ec25f7e7ae00ff253fd4491da
 | Task-specific operations first | Hidden required settings, identical pages, duplicate inputs | Four different operation headings and applicable source/fields tested in simple mode. Fixed atom count is directly editable when size is specified. Real SDF upload, scaffold selection and projected options checked; expert switch preserves values. |
 | Direct historical source | Unwanted optimizer default, editor detour, invalid source accepted | Fail-first test found source action invisible on results page. Now selection preserves the requested task, uses the real result/pose APIs and returns to design. Injected invalid pose response keeps results open and disables continuation; reselecting a real candidate recovers. |
 | Shared DOM moved | Broken WebGL/editor sizing, clipping, lost state | Real Chrome screenshots inspected for design tasks, editor and 390-pixel layout. Four task layouts tested at widths 1536/1024/768/390. Ketcher selection, feedback, molecular graph and interaction regressions pass. |
+| Molecular visual hierarchy | Missing spatial context; selection balls obscure bonds | Default translucent protein ribbons, detailed ligand, thin contextual residues, ambient occlusion, typed interaction legend and small selection markers. Four native display presets checked against identical ligand atom/bond/coordinate records. |
+| Native 2D sketch layout | 3D projection misrepresented as a 2D drawing; tiny zoom after navigation | Fail-first test found nonzero sketch Z coordinates. Native Indigo layout now runs only on import; identity is checked with stereochemical SMILES before/after. Native 2D reimport regenerates the old 3D stereo-label anchor. View fitting resets stale hidden-frame scale and publishes native zoom state. Graphical edits, roundtrip alignment, atom mapping and navigation preservation pass. |
 
 Commands run using `/opt/diffsbdd/venv/bin/python`, `PLAYWRIGHT_CHANNEL=chrome` and the temporary real fixture service on port 17865:
 
 - `python -m unittest discover -s tests -v`: **54 passed**.
-- `npm test`: **10 passed**.
+- `npm test`: **11 passed**.
 - `node tests/workspace_modes.mjs`, `node tests/layout.mjs`, `node tests/pages.mjs`, `node tests/molecular.mjs`, `node tests/browser.mjs --ui-only`: **all passed**. Fixture results are explicitly labelled historical generated structures, not new inference.
 - Ruff check/format, compileall, `bash -n install.sh web.sh`, Prettier and `git diff --check`: **passed**; `python tools/vendor_assets.py --verify`: **53 files verified**.
 
-Review: one authoritative form and molecular state; no added library or dynamic HTML injection. API validation, local-origin protections, persistent job formats and scientific rendering logic remain unchanged. Error handling prevents failed source loading from navigating to design. The unused preview route/CSS is removed. New GPU inference, full dataset evaluation, LLM and dependency vulnerability re-audit are not applicable to this presentation-only change; earlier GPU evidence below is historical, not rerun for 0.4.1.
+Review: one authoritative form and molecular state; no added library or dynamic HTML injection. API validation, local-origin protections, persistent job formats, chemistry reconstruction and interaction detection remain unchanged. Error handling prevents failed source loading from navigating to design. The unused preview route/CSS is removed. New GPU inference, full dataset evaluation, LLM and dependency vulnerability re-audit are not applicable to these UI/depiction changes; earlier GPU evidence below is historical, not rerun for 0.4.1. Native methods were checked against pinned code and the official [Ketcher API](https://github.com/epam/ketcher#ketcher-api) and [3Dmol ambient occlusion documentation](https://3dmol.org/doc/AmbientOcclusionStyle.html); the commercial visual reference is [Maestro](https://www.schrodinger.com/platform/products/maestro/). This is not a claim of feature parity with commercial suites.
 
 ## Version 0.4 molecular integrity and direct workspaces
 

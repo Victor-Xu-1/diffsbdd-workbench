@@ -65,6 +65,19 @@ progress {
   margin: 0;
   font-size: 13px;
 }
+#continuation-controls {
+  justify-content: flex-end;
+  padding: 10px 16px;
+}
+#continuation-controls label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+}
+#continue-task {
+  max-width: 260px;
+}
 .checks label {
   display: inline-flex;
   gap: 7px;
@@ -255,6 +268,19 @@ dialog p {
 .interaction-panel summary {
   cursor: pointer;
   color: #52647b;
+  flex-wrap: wrap;
+}
+.interaction-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #405067;
+  margin-left: 6px;
+}
+.interaction-kind i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 .interaction-row {
   display: flex;
