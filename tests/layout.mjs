@@ -70,6 +70,22 @@ try {
       path: path.join("test-results/layout", `${width}.png`),
       fullPage: true,
     });
+    for (const task of ["inpaint", "diversify", "optimize"]) {
+      if (width === 390) await page.locator("#mobile-menu").click();
+      await page.locator(`[data-task="${task}"]`).click();
+      assert.ok(await page.locator("#task-source").isVisible());
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+        `${task} has horizontal overflow at ${width}`,
+      );
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({
+        path: path.join("test-results/layout", `${width}-${task}.png`),
+        fullPage: true,
+      });
+    }
     console.log(`Passed: layout and navigation ${width}×${height}`);
   }
 } finally {

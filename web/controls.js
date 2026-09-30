@@ -78,6 +78,11 @@ export function syncControls() {
   const config = getContract(),
     task = $("task").value,
     source = $("mode").value;
+  const presentation = config.tasks[task];
+  $("generation-heading").textContent = presentation.settings_title;
+  $("source-label").textContent = presentation.source_label || "";
+  $("source-help").textContent = presentation.source_help;
+  $("task-source").hidden = !presentation.source_label;
   const available = config.models.filter((m) => m.tasks.includes(task));
   for (const option of $("model").options)
     option.disabled = !available.some((m) => m.id === option.value);
@@ -107,7 +112,8 @@ export function syncControls() {
   $("initial-input").hidden = task === "generate" || source === "result";
   $("inpaint-fields").hidden = task !== "inpaint";
   $("fragment-toolbar").hidden = task !== "inpaint";
-  $("optimization-fields").hidden = task !== "optimize" && task !== "diversify";
+  $("optimization-fields").hidden = task !== "optimize";
+  $("variation-fields").hidden = task !== "optimize" && task !== "diversify";
   $("sampling-fields").hidden = task === "optimize";
 }
 export function parseAtomNumbers(text) {

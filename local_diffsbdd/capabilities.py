@@ -13,12 +13,18 @@ TASKS = {
         "label": "从头生成",
         "title": "新建设计任务",
         "help": "根据蛋白口袋探索全新的分子结构。",
+        "settings_title": "生成新分子",
+        "source_label": None,
+        "source_help": "",
     },
     "inpaint": {
         "icon": "atom",
         "label": "局部结构设计",
         "title": "局部结构设计",
         "help": "保留关键片段，在口袋中重新设计其余结构。",
+        "settings_title": "保留片段与生长设置",
+        "source_label": "要保留片段的起始分子",
+        "source_help": "载入与蛋白同一坐标系的三维 SDF，再在下方结构中点选要保留的环或原子。其余部分由模型重新设计。",
         "forced": {"relaxation": 0, "fragment_policy": "all"},
     },
     "diversify": {
@@ -26,12 +32,18 @@ TASKS = {
         "label": "分子多样化",
         "title": "探索相似分子",
         "help": "从三维起始分子生成结构变体，不按性质筛选。",
+        "settings_title": "结构变体与改动幅度",
+        "source_label": "用于衍生变体的起始分子",
+        "source_help": "载入三维 SDF 或选择已有结果。小幅改造偏向相似结构；扩大变化会探索更多结构差异，不保证保留原骨架。",
     },
     "optimize": {
         "icon": "chart-bar",
         "label": "性质优化",
         "title": "性质优化任务",
         "help": "逐轮探索并按 QED 或 SA 筛选，不代表结合活性改善。",
+        "settings_title": "优化目标与逐轮筛选",
+        "source_label": "需要优化的起始分子",
+        "source_help": "载入三维 SDF 或选择已有结果，再选择优化目标。每轮保留评分更好的候选继续探索。",
     },
 }
 
@@ -42,7 +54,7 @@ FIELDS = [
     (
         "atoms",
         "目标大小（重原子数）",
-        "advanced-fields",
+        "sampling-fields",
         ["generate"],
         {"size_mode": ["fixed"]},
     ),
@@ -64,13 +76,13 @@ FIELDS = [
         {},
     ),
     ("objective", "优化目标", "optimization-fields", ["optimize"], {}),
-    ("population", "每轮探索候选数", "advanced-fields", ["optimize"], {}),
-    ("rounds", "优化轮数", "advanced-fields", ["optimize"], {}),
+    ("population", "每轮探索候选数", "optimization-fields", ["optimize"], {}),
+    ("rounds", "优化轮数", "optimization-fields", ["optimize"], {}),
     ("survivors", "每轮保留候选数", "advanced-fields", ["optimize"], {}),
     (
         "change_steps",
         "结构改动幅度",
-        "advanced-fields",
+        "variation-fields",
         ["optimize", "diversify"],
         {},
     ),
@@ -132,6 +144,11 @@ def task_presets(task):
             count=count, steps=100 if level == "quick" else 500, relaxation=0
         )
         if task == "optimize":
+            title = {
+                "quick": "单轮试跑",
+                "standard": "三轮筛选",
+                "explore": "五轮筛选",
+            }[level]
             population, rounds, survivors = {
                 "quick": (3, 1, 1),
                 "standard": (5, 3, 2),
@@ -144,6 +161,11 @@ def task_presets(task):
                 change_steps=change,
             )
         elif task == "diversify":
+            title = {
+                "quick": "小幅改造",
+                "standard": "适度探索",
+                "explore": "扩大变化",
+            }[level]
             options.update(change_steps=change)
         elif task == "inpaint":
             options.update(

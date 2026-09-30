@@ -354,11 +354,9 @@
 body[data-view="results"] #editing-panel {
   display: none;
 }
-body[data-view="editor"] #edit-current {
+body[data-view="editor"] #edit-current,
+body[data-view="editor"] .status-panel {
   display: none;
-}
-body[data-view="inspect"] .main-content {
-  padding-bottom: 28px;
 }
 #advanced-settings {
   padding: 14px 0 0;

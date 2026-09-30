@@ -379,14 +379,21 @@ async function saveEdit(next) {
 $("save-edit").addEventListener("click", () => saveEdit(false));
 $("optimize").addEventListener("click", () => saveEdit(true));
 $("use-original").addEventListener("click", async () => {
-  await selectMolecule(state.selected);
-  $("mode").value = "result";
-  $("task").value = $("continue-task").value;
-  $("task").dispatchEvent(new Event("change"));
-  applyPreset();
-  syncControls();
-  setView("design");
-  await inspectPocket();
+  if (state.loadingSource || state.saving || state.selected < 0) return;
+  try {
+    await selectMolecule(state.selected);
+    if (!state.source) return;
+    $("mode").value = "result";
+    $("task").value = $("continue-task").value;
+    $("task").dispatchEvent(new Event("change"));
+    applyPreset();
+    syncControls();
+    setView("design");
+    notice("");
+    await inspectPocket();
+  } catch (e) {
+    error(e.message);
+  }
 });
 $("history").addEventListener("change", () =>
   selectJob($("history").value).catch((e) => error(e.message)),
