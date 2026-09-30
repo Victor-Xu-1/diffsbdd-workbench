@@ -16,15 +16,13 @@ export function notice(message) {
 }
 export function setView(view) {
   document.body.dataset.view = view;
-  const surface =
-    view === "inspect" ? "design" : view === "editor" ? "results" : view;
+  const surface = view === "editor" ? "results" : view;
   document.body.classList.remove("navigation-open");
   $("mobile-menu").setAttribute("aria-expanded", "false");
   document
     .querySelectorAll(".app-view")
     .forEach((el) => (el.hidden = el.id !== surface + "-view"));
   $("action-bar").hidden = view !== "design";
-  $("generation-panel").hidden = view === "inspect";
   $("results-title").textContent =
     view === "editor" ? "结构编辑与设计反馈" : "任务与结果";
   $("results-subtitle").textContent =
@@ -32,12 +30,8 @@ export function setView(view) {
       ? "在二维画布中修改结构，保存后校验并更新三维构象。"
       : "查看生成结构、下载结果，选择候选继续设计。";
   const task = getContract().tasks[$("task").value];
-  $("page-title").textContent =
-    view === "inspect" ? "结构预览与相互作用" : task.title;
-  $("page-subtitle").textContent =
-    view === "inspect"
-      ? "载入蛋白和配体，检查完整结构、选择残基并查看相互作用。"
-      : task.help;
+  $("page-title").textContent = task.title;
+  $("page-subtitle").textContent = task.help;
   document
     .querySelectorAll(".nav-item")
     .forEach((button) =>
@@ -163,12 +157,12 @@ export function setupShell(handlers) {
   $("load-example").addEventListener(
     "click",
     safely(async () => {
-      setView(document.body.dataset.view === "inspect" ? "inspect" : "design");
+      setView("design");
       await callbacks.loadExample();
     }),
   );
   $("generate-form").addEventListener("input", (event) => {
-    if (event.target.closest("#settings-body")) {
+    if (event.target.closest(".task-options, #advanced-settings")) {
       document
         .querySelectorAll("[data-preset]")
         .forEach((el) => el.classList.remove("selected"));
@@ -180,8 +174,12 @@ export function setupShell(handlers) {
   $("choose-result-source").addEventListener(
     "click",
     safely(async () => {
+      $("continue-task").value = $("task").value;
       setView("results");
       await callbacks.openResults();
+      notice(
+        "选择历史任务与候选分子，然后点击“用所选原分子继续设计”。下一轮任务已按你的选择设置。",
+      );
     }),
   );
   $("edit-current").addEventListener("click", () => setView("editor"));

@@ -354,11 +354,9 @@
 body[data-view="results"] #editing-panel {
   display: none;
 }
-body[data-view="editor"] #edit-current {
+body[data-view="editor"] #edit-current,
+body[data-view="editor"] .status-panel {
   display: none;
-}
-body[data-view="inspect"] .main-content {
-  padding-bottom: 28px;
 }
 #advanced-settings {
   padding: 14px 0 0;
@@ -415,6 +413,9 @@ body[data-view="inspect"] .main-content {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   body[data-view="editor"] #editor {
+    height: 560px;
+  }
+  body[data-view="editor"] #viewer {
     height: 560px;
   }
 }

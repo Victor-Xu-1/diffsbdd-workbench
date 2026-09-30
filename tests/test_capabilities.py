@@ -27,6 +27,17 @@ class CapabilityTests(unittest.TestCase):
         self.assertNotIn("selectivity", contract["tasks"])
         self.assertNotIn("train", contract["tasks"])
 
+    def test_task_operations_and_simple_size_are_available_without_expert_mode(self):
+        from local_diffsbdd.capabilities import capabilities
+
+        contract = capabilities()
+        tasks = contract["tasks"]
+        self.assertEqual(len({spec["settings_title"] for spec in tasks.values()}), 4)
+        for task, spec in tasks.items():
+            self.assertEqual(bool(spec["source_label"]), task != "generate")
+        for name in ("atoms", "change_steps", "rounds", "population", "objective"):
+            self.assertNotEqual(contract["fields"][name]["section"], "advanced-fields")
+
     def test_model_choices_and_applicability_use_the_registry(self):
         from local_diffsbdd.capabilities import capabilities
         from local_diffsbdd.registry import CATALOG

@@ -2,12 +2,12 @@ import { addFigureLabel } from "./figure-labels.js";
 import { ligandOrientation } from "./molecular-camera.js";
 /** Shared publication figure conventions for both real molecular viewers. */
 export const FIGURE_DEFAULTS = Object.freeze({
-  proteinColor: "#b69bde",
-  carbonColor: "#2bbb35",
+  proteinColor: "#9167cc",
+  carbonColor: "#32b83a",
   surfaceOpacity: 0.3,
-  proteinOpacity: 0.75,
-  stickRadius: 0.18,
-  representation: "none",
+  proteinOpacity: 0.4,
+  stickRadius: 0.16,
+  representation: "cartoon",
   proteinScope: "full",
   ligandRepresentation: "sticks",
   background: "#ffffff",
@@ -25,19 +25,27 @@ export const FIGURE_DEFAULTS = Object.freeze({
 });
 export const FIGURE_PRESETS = Object.freeze({
   site: {
-    label: "结合位点 · 相互作用",
+    label: "结合位点",
     settings: { ...FIGURE_DEFAULTS },
+    focus: "ligand",
+  },
+  contacts: {
+    label: "相互作用简图",
+    settings: { ...FIGURE_DEFAULTS, representation: "none" },
     focus: "ligand",
   },
   surface: {
     label: "口袋表面",
     settings: {
       ...FIGURE_DEFAULTS,
+      proteinColor: "#b5cfe5",
       labels: false,
       sidechains: false,
       surfaceOpacity: 0.5,
-      proteinOpacity: 0.25,
+      proteinOpacity: 0.15,
+      representation: "none",
       showSurface: true,
+      showInteractions: false,
     },
     focus: "ligand",
   },
@@ -86,6 +94,12 @@ export function proteinStyle(settings) {
   if (settings.representation === "stick")
     return { stick: { color, opacity, radius: 0.1 } };
   return { cartoon: { color, opacity, thickness: 0.18, arrows: true } };
+}
+export function selectedLigandStyle(settings) {
+  return {
+    stick: { radius: settings.stickRadius * 1.1, color: "#e9a13b" },
+    sphere: { radius: 0.28, color: "#e9a13b" },
+  };
 }
 export function nearbyAtoms(model, points, radius) {
   const squared = radius * radius;
@@ -186,10 +200,10 @@ export function residueContext(
       addFigureLabel(viewer, `${atom.resn} ${atom.chain}:${atom.resi}`, {
         position: anchor,
         font: "Arial",
-        fontSize: 14,
-        fontColor: "#526070",
+        fontSize: 16,
+        fontColor: "#405067",
         backgroundColor: "#ffffff",
-        backgroundOpacity: 0.7,
+        backgroundOpacity: 0.85,
         borderThickness: 0,
         inFront: true,
         screenOffset: { x: 12, y: 12 },
@@ -201,6 +215,11 @@ export function applyCamera(viewer, settings) {
   viewer.setBackgroundColor(settings.background, 1);
   viewer.setProjection(settings.projection);
   viewer.enableFog(settings.fog);
+  viewer.setViewStyle({
+    style: "ambientOcclusion",
+    strength: 0.55,
+    radius: 1.5,
+  });
 }
 
 export function validateFigureSettings(input) {
@@ -330,10 +349,18 @@ export function fitBindingSite(
   residues,
   preserveOrientation = false,
 ) {
-  const selection =
-    settings.representation === "none" &&
-    settings.proteinScope !== "none" &&
-    residues.size
+  const surfaceAtoms =
+    settings.showSurface && settings.proteinScope !== "none"
+      ? nearbyAtoms(viewer.getModel(0), viewer.getModel(1).selectedAtoms({}), 9)
+      : [];
+  const selection = surfaceAtoms.length
+    ? {
+        or: [
+          { model: 1 },
+          { model: 0, index: surfaceAtoms.map((atom) => atom.index) },
+        ],
+      }
+    : settings.sidechains && settings.proteinScope !== "none" && residues.size
       ? {
           or: [
             { model: 1 },

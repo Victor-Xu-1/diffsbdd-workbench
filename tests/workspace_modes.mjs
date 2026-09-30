@@ -17,6 +17,55 @@ try {
   await page.goto(process.env.DIFFSBDD_TEST_URL || "http://127.0.0.1:17865", {
     waitUntil: "networkidle",
   });
+  assert.equal(
+    await page.locator('[data-view="inspect"]').count(),
+    0,
+    "Standalone preview must not duplicate the design workspace",
+  );
+  const taskHeadings = new Set();
+  for (const task of ["generate", "inpaint", "diversify", "optimize"]) {
+    await page.locator(`[data-task="${task}"]`).click();
+    taskHeadings.add(await page.locator("#generation-heading").innerText());
+    assert.equal(
+      await page.locator("#task-source").isVisible(),
+      task !== "generate",
+    );
+    assert.equal(
+      await page.locator("#inpaint-controls").isVisible(),
+      task === "inpaint",
+    );
+    assert.equal(
+      await page.locator("#objective").isVisible(),
+      task === "optimize",
+    );
+    assert.equal(
+      await page.locator("#change_steps").isVisible(),
+      ["diversify", "optimize"].includes(task),
+    );
+    assert.equal(
+      await page.locator("#rounds").isVisible(),
+      task === "optimize",
+    );
+    const settings = await page.locator("#generation-panel").boundingBox();
+    const shared = await page.locator(".design-top").boundingBox();
+    assert.ok(
+      settings.y < shared.y,
+      "Task operations must precede shared protein context",
+    );
+  }
+  assert.equal(taskHeadings.size, 4, "Each task needs its own operation panel");
+  await page.locator('[data-task="generate"]').click();
+  await page.locator("#size_mode").selectOption("fixed");
+  assert.ok(
+    await page.locator("#atoms").isVisible(),
+    "Custom size is editable in simple mode",
+  );
+  await page.locator("#atoms").fill("32");
+  const options = await page.evaluate(async () =>
+    (await import("/assets/controls.js")).readOptions(),
+  );
+  assert.equal(options.atoms, 32);
+  assert.equal(options.task, "generate");
   await page.locator("#load-example").click();
   await page.waitForFunction(
     () =>
@@ -43,7 +92,6 @@ try {
   await page.locator("#steps").fill("500");
   await page.locator("#experience-mode").selectOption("simple");
   for (const [view, selector] of [
-    ["inspect", "[data-view=inspect]"],
     ["results", "#nav-results"],
     ["editor", "#nav-editor"],
     ["library", "#nav-library"],
@@ -55,8 +103,6 @@ try {
       (expected) => document.body.dataset.view === expected,
       view,
     );
-    if (view === "inspect")
-      await page.locator("#pocket-interactions summary").waitFor();
     if (view === "library")
       await page.locator("#library-content input").first().waitFor();
     if (view === "compare")
@@ -69,13 +115,8 @@ try {
       ),
     );
     assert.equal(await page.locator(".nav-item.active").count(), 1);
-    if (view === "inspect") {
-      assert.equal(await page.locator("#generation-panel").isVisible(), false);
-      assert.equal(await page.locator("#action-bar").isVisible(), false);
-      const rect = await page.locator("#pocket-viewer").boundingBox();
-      assert.ok(rect.width > 850 && rect.height > 500);
-    }
     if (view === "results") {
+      assert.ok(await page.locator(".status-panel").isVisible());
       await page.waitForFunction(
         () => !document.querySelector("#save-edit").disabled,
       );
@@ -84,6 +125,37 @@ try {
       assert.ok(rect.width > 1150 && rect.height > 500);
     }
     if (view === "editor") {
+      assert.equal(await page.locator(".status-panel").isVisible(), false);
+      await page.evaluate(() => {
+        const ketcher = document.querySelector("#editor").contentWindow.ketcher;
+        const layout = ketcher.layout.bind(ketcher);
+        ketcher.layout = async () => {
+          ketcher.layout = layout;
+          await new Promise((resolve) => {
+            window.releaseEditorLayout = resolve;
+          });
+          return layout();
+        };
+      });
+      await page
+        .locator("#history")
+        .selectOption(await page.locator("#history").inputValue());
+      await page.waitForFunction(() => !!window.releaseEditorLayout);
+      assert.equal(
+        await page.locator("#editor").getAttribute("aria-busy"),
+        "true",
+      );
+      assert.equal(
+        await page
+          .locator("#editor")
+          .evaluate((frame) => getComputedStyle(frame).pointerEvents),
+        "none",
+      );
+      assert.ok(await page.locator("#save-edit").isDisabled());
+      await page.evaluate(() => window.releaseEditorLayout());
+      await page.waitForFunction(
+        () => !document.querySelector("#save-edit").disabled,
+      );
       await page.waitForFunction(
         () =>
           document.querySelector("#editor").getAttribute("aria-busy") ===
@@ -91,6 +163,17 @@ try {
       );
       assert.equal(await page.locator("#editor").isVisible(), true);
       assert.equal(await page.locator("#viewer").isVisible(), true);
+      assert.ok(
+        await page.evaluate(() =>
+          [
+            ...document
+              .querySelector("#editor")
+              .contentWindow.ketcher.editor.struct()
+              .atoms.values(),
+          ].every((atom) => Math.abs(atom.pp.z || 0) < 1e-6),
+        ),
+        "The sketcher must use a real 2D layout, not projected 3D coordinates",
+      );
       assert.equal(
         await page.locator("#results-title").innerText(),
         "结构编辑与设计反馈",
@@ -151,7 +234,8 @@ try {
           (item) =>
             item.width > 3 && item.x > 35 && item.right < item.view - 35,
         ),
-        "Chemical atom labels must be readable and clear of side toolbars",
+        "Chemical atom labels must be readable and clear of side toolbars: " +
+          JSON.stringify(drawing),
       );
     }
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -171,7 +255,44 @@ try {
         document.querySelector("#pocket-confirm-title").textContent ===
         "口袋已确认",
     );
+    await page.locator("#experience-mode").selectOption("simple");
+    if (task === "inpaint") {
+      await page.locator("#keep-scaffold").click();
+      assert.ok((await page.locator("#fixed-atoms").inputValue()).length > 0);
+    }
+    if (task === "diversify" || task === "optimize") {
+      await page.locator("[data-preset=explore]").click();
+      assert.equal(await page.locator("#change_steps").inputValue(), "150");
+      await page.locator("#change_steps").fill("80");
+    }
+    if (task === "optimize") {
+      await page.locator("#objective").selectOption("sa");
+      await page.locator("#rounds").fill("4");
+    }
+    const requestOptions = await page.evaluate(async () =>
+      (await import("/assets/controls.js")).readOptions(),
+    );
+    assert.equal(requestOptions.task, task);
+    assert.equal("objective" in requestOptions, task === "optimize");
+    assert.equal("fixed_atoms" in requestOptions, task === "inpaint");
+    if (task === "diversify" || task === "optimize")
+      assert.equal(requestOptions.change_steps, 80);
+    if (task === "optimize") {
+      assert.equal(requestOptions.objective, "sa");
+      assert.equal(requestOptions.rounds, 4);
+    }
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: `test-results/workspaces/${task}-simple.png`,
+      fullPage: true,
+    });
     await page.locator("#experience-mode").selectOption("expert");
+    assert.deepEqual(
+      await page.evaluate(async () =>
+        (await import("/assets/controls.js")).readOptions(),
+      ),
+      requestOptions,
+    );
     const canvas = await page.locator("#pocket-viewer").boundingBox();
     assert.ok(
       canvas.width > 850 && canvas.height > 500,
@@ -184,6 +305,54 @@ try {
       fullPage: true,
     });
   }
+  await page.locator('[data-task="diversify"]').click();
+  await page.locator("#choose-result-source").click();
+  assert.equal(
+    await page.evaluate(() => document.body.dataset.view),
+    "results",
+  );
+  assert.ok(
+    await page.locator("#use-original").isVisible(),
+    "Selecting a source must not require opening the editor",
+  );
+  await page.locator("#use-original:enabled").waitFor();
+  assert.equal(await page.locator("#continue-task").inputValue(), "diversify");
+  await page.route("**/api/poses/inspect", (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "起始结构校验失败，请重新选择候选。" }),
+    }),
+  );
+  await page.locator("#use-original").click();
+  await page.locator("#error").waitFor({ state: "visible" });
+  assert.equal(
+    await page.evaluate(() => document.body.dataset.view),
+    "results",
+    "Invalid source must not enter the design workflow",
+  );
+  assert.ok(await page.locator("#use-original").isDisabled());
+  await page.unroute("**/api/poses/inspect");
+  await page.locator("#molecules button").first().click();
+  await page.locator("#use-original:enabled").waitFor();
+  await page.locator("#use-original").click();
+  await page.waitForFunction(
+    () =>
+      document.body.dataset.view === "design" &&
+      document.querySelector("#pocket-confirm-title").textContent ===
+        "口袋已确认",
+  );
+  assert.equal(await page.locator("#task").inputValue(), "diversify");
+  assert.ok(await page.locator("#result-source").isVisible());
+  assert.equal(await page.locator("#initial-input").isVisible(), false);
+  assert.ok(
+    await page.locator("#choose-result-source").isVisible(),
+    "The selected source must remain replaceable",
+  );
+  assert.equal(
+    await page.locator("#generation-heading").innerText(),
+    "结构变体与改动幅度",
+  );
   assert.deepEqual(errors, []);
   console.log(
     "Passed: every sidebar workspace, enlarged previews, shared editor state, simple/expert parameter preservation and invalid-field recovery",

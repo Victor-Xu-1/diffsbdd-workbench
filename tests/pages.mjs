@@ -416,6 +416,17 @@ try {
 } catch (error) {
   if (page) {
     console.error(await page.locator("#error").textContent());
+    console.error(
+      await page.evaluate(() => ({
+        view: document.body.dataset.view,
+        task: document.querySelector("#history").value,
+        editorBusy: document.querySelector("#editor").getAttribute("aria-busy"),
+        editorLoaded:
+          !!document.querySelector("#editor").contentWindow?.ketcher,
+        saveDisabled: document.querySelector("#save-edit").disabled,
+        source: document.querySelector("#result-source").textContent,
+      })),
+    );
     await page.screenshot({
       path: path.join(root, "test-results/pages/failure.png"),
       fullPage: true,

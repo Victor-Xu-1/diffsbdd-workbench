@@ -73,13 +73,6 @@
         </button>
         <hr />
         <p class="nav-label">检查与编辑</p>
-        <button class="nav-item" data-view="inspect">
-          <img
-            class="icon"
-            src="/assets/vendor/tabler/atom.svg"
-            alt=""
-          />预览与相互作用
-        </button>
         <button id="nav-editor" class="nav-item" data-view="editor">
           <img
             class="icon"
@@ -92,7 +85,7 @@
           class="nav-item"
           type="button"
           disabled
-          title="先在设计或预览页面载入蛋白，即可选链、去水并导出处理后的结构。"
+          title="先在设计页载入蛋白，即可选链、去水并导出处理后的结构。"
         >
           <img
             class="icon"
@@ -138,6 +131,48 @@
 
         <form id="generate-form">
           <select id="task" hidden aria-label="设计类型"></select>
+          <section class="panel generation-panel" id="generation-panel">
+            <div class="panel-heading">
+              <h2 id="generation-heading"></h2>
+              <div id="design-presets" class="segmented compact"></div>
+            </div>
+            <div id="settings-body">
+              <div class="task-settings">
+                <div id="task-source" hidden>
+                  <h3 id="source-label"></h3>
+                  <p id="source-help" class="hint"></p>
+                  <p id="result-source" class="hint" hidden></p>
+                  <div id="initial-input" hidden>
+                    <label for="initial-sdf">起始分子三维 SDF</label>
+                    <input id="initial-sdf" type="file" accept=".sdf" />
+                  </div>
+                  <button type="button" id="choose-result-source">
+                    从历史结果中选择
+                  </button>
+                </div>
+                <div class="task-options">
+                  <div id="sampling-fields" class="generation-grid"></div>
+                  <div id="inpaint-fields" hidden>
+                    <div id="inpaint-controls" class="field-grid"></div>
+                  </div>
+                  <div id="optimization-fields" class="field-grid" hidden></div>
+                  <div id="variation-fields" class="field-grid" hidden></div>
+                  <p id="preset-summary" class="hint" role="status"></p>
+                  <div class="model-controls">
+                    <label for="model">使用模型</label
+                    ><select id="model"></select>
+                  </div>
+                </div>
+              </div>
+              <section id="advanced-settings" hidden>
+                <h3>专家参数</h3>
+                <div id="advanced-fields" class="field-grid"></div>
+                <p class="hint">
+                  只显示当前任务可用的参数。参数含义和建议可通过旁边的问号查看。
+                </p>
+              </section>
+            </div>
+          </section>
           <div class="design-top">
             <section class="panel input-panel">
               <div class="panel-heading">
@@ -270,16 +305,6 @@
                     查看已选残基 →
                   </button>
                 </div>
-                <p id="result-source" class="hint" hidden></p>
-                <div id="initial-input" hidden>
-                  <label for="initial-sdf">起始分子 / 片段三维 SDF</label
-                  ><input id="initial-sdf" type="file" accept=".sdf" /><button
-                    type="button"
-                    id="choose-result-source"
-                  >
-                    从历史结果中选择
-                  </button>
-                </div>
               </div>
             </section>
             <section class="panel pocket-preview-panel">
@@ -360,36 +385,6 @@
               ></div>
             </section>
           </div>
-          <section class="panel generation-panel" id="generation-panel">
-            <div class="panel-heading">
-              <h2 id="generation-heading">设计设置</h2>
-              <div id="design-presets" class="segmented compact"></div>
-            </div>
-            <div id="settings-body">
-              <div id="sampling-fields" class="generation-grid"></div>
-              <div class="model-controls">
-                <label for="model">使用模型</label
-                ><select id="model"></select>
-              </div>
-              <p id="preset-summary" class="hint" role="status"></p>
-
-              <div id="inpaint-fields" hidden>
-                <p class="hint">
-                  在右上方三维预览中点击配体保留原子；默认一次选中整个环。
-                </p>
-                <div id="inpaint-controls" class="field-grid"></div>
-              </div>
-              <div id="optimization-fields" class="field-grid" hidden></div>
-
-              <section id="advanced-settings" hidden>
-                <h3>专家参数</h3>
-                <div id="advanced-fields" class="field-grid"></div>
-                <p class="hint">
-                  只显示当前任务可用的参数。参数含义和建议可通过旁边的问号查看。
-                </p>
-              </section>
-            </div>
-          </section>
         </form>
       </section>
       <section id="results-view" class="app-view" hidden>
@@ -425,6 +420,12 @@
             <div id="diagnostics" class="downloads"></div>
           </details>
         </section>
+        <div class="panel viewer-tools" id="continuation-controls">
+          <label for="continue-task"
+            >下一轮想做什么？<select id="continue-task"></select
+          ></label>
+          <button id="use-original" disabled>用所选原分子继续设计</button>
+        </div>
         <div class="results-workspace">
           <section id="preview-panel" class="panel" hidden>
             <div class="panel-heading">
@@ -452,6 +453,8 @@
                 </select></label
               >
             </div>
+            <div id="viewer" aria-label="候选分子三维预览"></div>
+            <p id="viewer-note" class="hint" aria-live="polite"></p>
             <div class="viewer-tools checks">
               <label><input id="atom-labels" type="checkbox" />原子编号</label
               ><label
@@ -459,8 +462,6 @@
               ><button id="reset-view" type="button">视图复位</button
               ><button id="clear-fixed" type="button">清除原子选择</button>
             </div>
-            <div id="viewer" aria-label="候选分子三维预览"></div>
-            <p id="viewer-note" class="hint" aria-live="polite"></p>
             <div
               id="result-interactions"
               class="interaction-panel"
@@ -515,11 +516,8 @@
               <option value="4">4 · 值得继续</option>
               <option value="5">5 · 优先研究</option>
             </select>
-            <label for="continue-task">下一轮想做什么？</label
-            ><select id="continue-task"></select>
             <div class="actions">
               <button id="save-edit">保存编辑与反馈</button
-              ><button id="use-original">用原分子继续设计</button
               ><button id="optimize" class="primary">
                 保存编辑版并设置下一轮
               </button>

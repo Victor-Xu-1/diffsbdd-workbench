@@ -167,6 +167,59 @@ try {
     path: "test-results/molecular/workbench.png",
     fullPage: true,
   });
+  const sceneAtoms = () =>
+    page.evaluate(() =>
+      window.testViewers["pocket-viewer"]
+        .getModel(1)
+        .selectedAtoms({})
+        .map((a) => [a.elem, a.x, a.y, a.z, a.bonds, a.bondOrder]),
+    );
+  const canonicalScene = await sceneAtoms();
+  for (const preset of ["contacts", "surface", "protein", "site"]) {
+    await page.locator('[data-figure-preset="pocket"]').selectOption(preset);
+    await page.waitForFunction(
+      () => document.querySelector("#pocket-viewer").dataset.ready === "true",
+    );
+    assert.deepEqual(
+      await sceneAtoms(),
+      canonicalScene,
+      "Display changes must preserve every ligand atom, bond and coordinate",
+    );
+    const hasCartoon = await page.evaluate(() =>
+      window.testViewers["pocket-viewer"]
+        .getModel(0)
+        .selectedAtoms({})
+        .some((a) => a.style?.cartoon),
+    );
+    assert.equal(hasCartoon, ["protein", "site"].includes(preset));
+    const surface = await page.evaluate(() =>
+      Object.values(window.testViewers["pocket-viewer"].surfaces).flatMap(
+        (parts) =>
+          Array.from(parts, (part) => ({
+            finished: part.finished,
+            vertices: part.geo.geometryGroups.reduce(
+              (sum, group) => sum + group.vertices,
+              0,
+            ),
+          })),
+      ),
+    );
+    if (preset === "surface") {
+      assert.ok(
+        surface.length > 0 &&
+          surface.every((part) => part.finished && part.vertices > 0),
+        "Surface preset must produce finished native molecular surface geometry",
+      );
+    } else assert.equal(surface.length, 0);
+    await page
+      .locator("#pocket-viewer")
+      .evaluate((el) =>
+        window.scrollBy(0, el.getBoundingClientRect().top - 90),
+      );
+    await page
+      .locator("#pocket-viewer canvas")
+      .screenshot({ path: `test-results/molecular/preset-${preset}.png` });
+  }
   const pdb = (await readFile("examples/3rfm.pdb", "utf8")).replaceAll(
     "CFF",
     "ZZZ",

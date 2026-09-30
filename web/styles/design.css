@@ -239,6 +239,50 @@
 }
 .generation-panel .panel-heading {
   margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.task-settings {
+  display: flex;
+  gap: 24px;
+  align-items: start;
+}
+.task-options {
+  flex: 1;
+  min-width: 0;
+}
+#task-source {
+  flex: 0 0 290px;
+  border-right: 1px solid var(--border);
+  padding-right: 20px;
+}
+#task-source h3 {
+  margin: 4px 0 6px;
+  font-size: 16px;
+}
+#initial-input input {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.task-options .field-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+@media (max-width: 1050px) {
+  .task-settings {
+    flex-direction: column;
+    gap: 12px;
+  }
+  #task-source,
+  .task-options {
+    width: 100%;
+    flex-basis: auto;
+  }
+  #task-source {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 12px;
+  }
 }
 .generation-grid {
   display: grid;

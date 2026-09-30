@@ -12,6 +12,7 @@ import {
   resetCamera,
   fitBindingSite,
   ligandStyle,
+  selectedLigandStyle,
   proteinStyle,
   nearbyAtoms,
   residueContext,
@@ -281,7 +282,7 @@ function paintAtoms() {
   if (data.initial && $("task").value === "inpaint" && indices.length)
     viewer.addStyle(
       { model: 1, index: indices },
-      { sphere: { scale: 0.34, color: 0xefaa39 } },
+      selectedLigandStyle(settings),
     );
   viewer.render();
 }

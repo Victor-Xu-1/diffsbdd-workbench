@@ -38,6 +38,7 @@ import {
   validateViewRecipe,
   ligandStyle,
   FIGURE_DEFAULTS,
+  selectedLigandStyle,
 } from "../web/molecular-style.js";
 test("figure settings reject malformed colors, oversized radii and invalid camera rotations", () => {
   assert.throws(() => validateFigureSettings({ surfaceOpacity: 2 }));
@@ -71,6 +72,14 @@ test("ligand representations retain conventional element colors and distinct geo
   );
   assert.ok(ligandStyle("sphere", FIGURE_DEFAULTS).sphere);
   assert.ok(!ligandStyle("sticks", FIGURE_DEFAULTS).sphere);
+});
+test("selected atoms keep visible bonds instead of oversized space-filling markers", () => {
+  const selected = selectedLigandStyle(FIGURE_DEFAULTS);
+  assert.ok(selected.stick.radius > 0);
+  assert.ok(
+    selected.sphere.radius < 0.4,
+    "Adjacent selected atoms must leave the bond visible",
+  );
 });
 
 import {

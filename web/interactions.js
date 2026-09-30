@@ -3,7 +3,7 @@ import { api } from "./api.js";
 import { addFigureLabel } from "./figure-labels.js";
 const states = new Map();
 const kinds = {
-  hydrogen_bond: { label: "氢键候选", color: "#b8a125" },
+  hydrogen_bond: { label: "氢键候选", color: "#a5890c" },
   pi_stacking: { label: "π–π 堆积", color: "#885bb2" },
   salt_bridge: { label: "盐桥候选", color: "#d36c98" },
   hydrophobic: { label: "疏水接触", color: "#83929f" },
@@ -30,10 +30,18 @@ function panel(id, s, content) {
 function drawPanel(id, s) {
   const details = document.createElement("details"),
     summary = document.createElement("summary");
-  const entries = Object.entries(kinds);
-  summary.textContent = entries
-    .map(([key, value]) => `${value.label} ${s.data.summary[key]}`)
-    .join(" · ");
+  summary.append("相互作用 ");
+  for (const [key, kind] of Object.entries(kinds)) {
+    const count = s.data.summary[key];
+    if (!count) continue;
+    const badge = document.createElement("span"),
+      dot = document.createElement("i");
+    badge.className = "interaction-kind";
+    dot.style.backgroundColor = kind.color;
+    badge.append(dot, `${kind.label} ${count}`);
+    summary.append(badge);
+  }
+  if (!s.data.interactions.length) summary.append("未检出");
   summary.title = "展开查看判定依据、残基与距离。显示开关在“显示与出图”中。";
   details.append(summary);
   const note = document.createElement("p");
@@ -160,7 +168,7 @@ export function drawInteractions(viewer, id, settings) {
     if (settings.labels)
       addFigureLabel(viewer, `${item.distance.toFixed(2)} Å`, {
         position: at(0.5),
-        fontSize: 12,
+        fontSize: 14,
         fontColor: color,
         backgroundColor: "#ffffff",
         backgroundOpacity: 0.85,
